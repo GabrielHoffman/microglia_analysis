@@ -28,7 +28,7 @@ rmarkdown::render("MOFA2.Rmd")
 
 --->
 
-Note that there is an incompatability between the python backends of `synapser` and `MOFA2`.  They cannot be run in the same R instance
+Note that there is an incompatability between the python backends of `synapser` and `MOFA2`.  They cannot be run in the same R instance, but with caching the code runs the second time
 
 
 ```{r setup, include=FALSE}
@@ -151,7 +151,6 @@ colnames(geneExpr_filter) = df_metadata$Patient_ID
 
 
 ```{r test}
-
 file <- system.file("extdata", "test_data.RData", package = "MOFA2")
 load(file) 
 
