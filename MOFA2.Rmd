@@ -1,0 +1,180 @@
+---
+title: "MOFA2 analysis"
+subtitle: ''
+author: "Developed by [Gabriel Hoffman](http://gabrielhoffman.github.io/)"
+date: "Run on `r Sys.time()`"
+documentclass: article
+output: 
+  html_document:
+  toc: true
+  smart: false
+---
+
+
+
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages({
+library(data.table)
+library(ggplot2)
+library(viridis)
+library(cowplot)
+library(vcd)
+library(GenomicRanges)
+library(ggrepel)
+library(AnnotationHub)
+library(ensembldb)
+library(cit)
+library(VariantAnnotation)
+library(MOFA2)
+library(synapser)
+})
+
+synLogin()
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning=FALSE,
+  message=FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  cache = TRUE)
+```
+
+
+```{r functions}
+# For ENSEMBL id ENSG00000279457.4, return ENSG00000279457
+trim_ensembl_ids = function(x){
+  gsub("(.*)\\.(.*)", "\\1", x) 
+}
+
+# Add column Symbol using column gene_id storing ENSEMBL id
+getGeneSymbol = function( df, column="row.names"){
+
+  if( ! is(df, "data.frame") ){
+    df = as.data.frame(df)
+  }
+
+  # Load ENSEMBL v96 database
+  # see https://www.bioconductor.org/packages/release/bioc/vignettes/ensembldb/inst/doc/ensembldb.html#10_getting_or_building_ensdb_databasespackages
+  ah <- AnnotationHub()
+  ensdb = ah[["AH69187"]] # ENSEMBL v96
+
+  if( column == "row.names"){    
+    geneID = rownames(df)
+  }else{
+    geneID = df[[column]]
+  }
+
+  ensIDs = trim_ensembl_ids( geneID )
+
+  geneSymbol = mapIds(ensdb, keys=ensIDs, keytype="GENEID", column="GENENAME")
+  df$Symbol = geneSymbol
+
+  entrez = mapIds(ensdb, keys=ensIDs, keytype="GENEID", column="ENTREZID")
+  df$Entrez = entrez
+
+  df_info = ensembldb::select(ensdb, keys=ensIDs, keytype="GENEID", column=c("SEQNAME", "GENESEQSTART", "GENESEQEND"))
+
+  # df2 = merge( data.frame(GENEID = ensIDs, stringsAsFactors=FALSE), chroms, by='GENEID')
+
+  idx = match(ensIDs, df_info$GENEID)
+  # df$Chrom = c()
+  df$Chrom = df_info$SEQNAME[idx]
+  # df$Start = c()
+  df$Start = df_info$GENESEQSTART[idx]
+  # df$End = c()
+  df$End = df_info$GENESEQEND[idx]
+
+  df
+}
+```
+
+```{r read.data}
+# read ATAC-seq data
+#-------------------
+chromAccess = readRDS("/sc/arion/projects/Microglia/atacseq/step_qc_analyses/Model1_ATACseq_norm__QuantPerMig_BIC_4in0.05_CPM_1in0.2_BBrandom_atFDR_0.05/files/KeepDxResidualized_matrix.RDs")
+
+# read gene expression data
+#-------------------
+geneExpr <- readRDS("/sc/arion/projects/Microglia/rnaseq/step_qc_analyses//NotStrict_SampQC_Model1_gene_norm__QuantPerMig_BIC_4in0.05_CPM_1in0.2_BBrandom_atFDR_0.05/KeepDxResidualized_matrix.RDs")
+
+geneInfo = data.table(Gene = rownames(geneExpr))
+geneInfo = getGeneSymbol( geneInfo, "Gene")
+
+# read genotype data
+#-------------------
+
+df_position = fread( synGet('syn24911783')$path )
+gr_position = with(df_position, GRanges(V1, IRanges(V2, V3, name=V4)))
+
+genotypeVCF = "/sc/arion/projects/Microglia/genotyping/Combined_Phase1and2/Merged_Chr1toX_FixedNames.vcf.gz"
+
+param <- ScanVcfParam(which=gr_position[1]) 
+genoObj.tmp = readVcf( genotypeVCF, "hg38", param)
+
+# read sample metadata
+#-------------------
+df_metadata = fread(synGet('syn24967684')$path)
+
+i = with(df_metadata, Original_RNAseqName %in% colnames(geneExpr) &
+						Original_ATACseqName %in% colnames(chromAccess)	)
+df_metadata = df_metadata[i,]
+
+
+# ATAC-seq: sort in same order as df_metdata
+i = match(df_metadata$Original_ATACseqName, colnames(chromAccess))
+chromAccess_filter = chromAccess[,i]
+colnames(chromAccess_filter) = df_metadata$Patient_ID
+
+# RNA-seq: sort in same order as df_metdata
+i = match(df_metadata$Original_RNAseqName, colnames(geneExpr))
+geneExpr_filter = geneExpr[,i]
+colnames(geneExpr_filter) = df_metadata$Patient_ID
+```
+
+```{r run.MOFA2}
+cbind(colnames(geneExpr_filter), colnames(chromAccess_filter))
+
+cv = apply(geneExpr_filter, 1, function(x) sd(2^x) / mean(2^x))
+include_ge = which(cv >= quantile(cv, .9))
+
+
+cv = apply(chromAccess_filter, 1, function(x) sd(2^x) / mean(2^x))
+include_cra = which(cv >= quantile(cv, .98))
+
+
+MOFAobject <- create_mofa_from_matrix( 
+				list(GeneExpression = geneExpr_filter[include_ge,],
+					 ChromatinAccess = chromAccess_filter[include_cra,]))
+
+
+
+# plot_data_overview( MOFAobject)
+
+data_opts <- get_default_data_options(MOFAobject)
+model_opts <- get_default_model_options(MOFAobject)
+model_opts$num_factors <- 10
+
+train_opts <- get_default_training_options(MOFAobject)
+
+
+
+
+MOFAobject <- prepare_mofa(
+  object = MOFAobject,
+  data_options = data_opts,
+  model_options = model_opts,
+  training_options = train_opts
+)
+
+outfile = file.path(getwd(),"model.hdf5")
+MOFAobject.trained <- run_mofa(MOFAobject, outfile)
+```
+
+
+
+
+
+
+
