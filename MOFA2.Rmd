@@ -42,10 +42,7 @@ library(ensembldb)
 library(cit)
 library(VariantAnnotation)
 library(MOFA2)
-library(synapser)
 })
-
-synLogin()
 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -106,6 +103,8 @@ getGeneSymbol = function( df, column="row.names"){
 ```
 
 ```{r read.data}
+synapser::synLogin()
+
 # read ATAC-seq data
 #-------------------
 chromAccess = readRDS("/sc/arion/projects/Microglia/atacseq/step_qc_analyses/Model1_ATACseq_norm__QuantPerMig_BIC_4in0.05_CPM_1in0.2_BBrandom_atFDR_0.05/files/KeepDxResidualized_matrix.RDs")
@@ -120,7 +119,7 @@ geneInfo = getGeneSymbol( geneInfo, "Gene")
 # read genotype data
 #-------------------
 
-df_position = fread( synGet('syn24911783')$path )
+df_position = fread( synapser::synGet('syn24911783')$path )
 gr_position = with(df_position, GRanges(V1, IRanges(V2, V3, name=V4)))
 
 genotypeVCF = "/sc/arion/projects/Microglia/genotyping/Combined_Phase1and2/Merged_Chr1toX_FixedNames.vcf.gz"
@@ -160,6 +159,7 @@ MOFAmodel <- prepare_mofa(MOFAmodel)
 MOFAmodel <- run_mofa(MOFAmodel, use_basilisk = TRUE) 
 ```
 
+reticulate::use_python('/hpc/packages/minerva-common/python/3.6.2/bin/python')
 
 
 
