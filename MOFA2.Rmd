@@ -131,7 +131,7 @@ genoObj.tmp = readVcf( genotypeVCF, "hg38", param)
 
 # read sample metadata
 #-------------------
-df_metadata = fread(synGet('syn24967684')$path)
+df_metadata = fread(synapser::synGet('syn24967684')$path)
 
 i = with(df_metadata, Original_RNAseqName %in% colnames(geneExpr) &
 						Original_ATACseqName %in% colnames(chromAccess)	)
