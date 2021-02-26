@@ -172,7 +172,7 @@ include_ge = which(cv >= quantile(cv, .9))
 cv = apply(chromAccess_filter, 1, function(x) sd(2^x) / mean(2^x))
 include_cra = which(cv >= quantile(cv, .98))
 
-group = sample(c('A', 'B'), ncol(chromAccess_filter), replace=TRUE)
+group = sample(c('A'), ncol(chromAccess_filter), replace=TRUE)
 
 
 MOFAobject <- create_mofa_from_matrix( 
