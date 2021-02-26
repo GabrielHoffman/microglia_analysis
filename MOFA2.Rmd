@@ -12,6 +12,22 @@ output:
 
 
 
+<!---
+
+cd /hpc/users/hoffmg01/work/microglia_analysis
+# rm -rf cit_analysis_cache/
+ml git pandoc R/4.0.3
+git pull
+R
+
+system("git pull")
+
+
+rmarkdown::render("MOFA2.Rmd")
+
+
+
+--->
 
 ```{r setup, include=FALSE}
 suppressPackageStartupMessages({
@@ -19,7 +35,6 @@ library(data.table)
 library(ggplot2)
 library(viridis)
 library(cowplot)
-library(vcd)
 library(GenomicRanges)
 library(ggrepel)
 library(AnnotationHub)
@@ -162,15 +177,37 @@ train_opts <- get_default_training_options(MOFAobject)
 
 
 MOFAobject <- prepare_mofa(
-  object = MOFAobject,
-  data_options = data_opts,
-  model_options = model_opts,
-  training_options = train_opts
+  object = MOFAobject#,
+  # data_options = data_opts,
+  # model_options = model_opts,
+  # training_options = train_opts
 )
 
 outfile = file.path(getwd(),"model.hdf5")
 MOFAobject.trained <- run_mofa(MOFAobject, outfile)
 ```
+
+
+
+
+library(MOFA2)
+
+
+file <- system.file("extdata", "test_data.RData", package = "MOFA2")
+load(file) 
+
+MOFAmodel <- create_mofa(dt)
+
+MOFAmodel <- prepare_mofa(MOFAmodel)
+MOFAmodel <- run_mofa(MOFAmodel, use_basilisk = TRUE) 
+
+
+
+
+
+
+
+
 
 
 
