@@ -148,6 +148,24 @@ geneExpr_filter = geneExpr[,i]
 colnames(geneExpr_filter) = df_metadata$Patient_ID
 ```
 
+
+```{r test, cache=FALSE}
+
+file <- system.file("extdata", "test_data.RData", package = "MOFA2")
+load(file) 
+
+MOFAmodel <- create_mofa(dt)
+
+MOFAmodel <- prepare_mofa(MOFAmodel)
+MOFAmodel <- run_mofa(MOFAmodel, use_basilisk = TRUE) 
+```
+
+
+
+
+
+
+
 ```{r run.MOFA2}
 cbind(colnames(geneExpr_filter), colnames(chromAccess_filter))
 
@@ -184,31 +202,8 @@ MOFAobject <- prepare_mofa(
 )
 
 outfile = file.path(getwd(),"model.hdf5")
-MOFAobject.trained <- run_mofa(MOFAobject, outfile)
+MOFAobject.trained <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
 ```
-
-
-
-
-library(MOFA2)
-
-
-file <- system.file("extdata", "test_data.RData", package = "MOFA2")
-load(file) 
-
-MOFAmodel <- create_mofa(dt)
-
-MOFAmodel <- prepare_mofa(MOFAmodel)
-MOFAmodel <- run_mofa(MOFAmodel, use_basilisk = TRUE) 
-
-
-
-
-
-
-
-
-
 
 
 
