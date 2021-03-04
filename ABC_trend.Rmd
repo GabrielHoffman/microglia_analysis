@@ -1,0 +1,71 @@
+---
+title: "ABS vs correlation trend"
+subtitle: ''
+author: "Developed by [Gabriel Hoffman](http://gabrielhoffman.github.io/)"
+date: "Run on `r Sys.time()`"
+documentclass: article
+output: 
+  html_document:
+  toc: true
+  smart: false
+---
+
+
+
+<!---
+
+cd /hpc/users/hoffmg01/work/microglia_analysis
+# rm -rf MOFA2_cache/
+ml git pandoc R/4.0.3
+git pull
+R
+
+system("git pull")
+
+
+rmarkdown::render("MOFA2.Rmd")
+
+--->
+
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages({
+library(data.table)
+library(ggplot2)
+})
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning=FALSE,
+  message=FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  cache = TRUE)
+```
+
+
+
+```{r make plot}
+library(synapser)
+library(ggplot2)
+library(cowplot)
+synLogin()
+
+df = readRDS(synGet('syn25014476')$path)
+
+xmax = 5.6e5
+
+fig1 = ggplot(df, aes(abs(PeakToGene_dist), abs(Spearman_Rho), color=ABCscore > 0.02)) + geom_smooth(method="gam") + theme_classic() + theme(aspect.ratio=1, legend.position = "none") + scale_color_manual(values=c("blue", "red")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0)) #+ ylim(0, NA)
+
+fig2 = ggplot(df, aes(abs(PeakToGene_dist), color=ABCscore > 0.02)) + geom_density() + theme_classic() + theme(legend.position = "none") + scale_color_manual(values=c("blue", "red")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0)) 
+
+
+plot_grid(fig1, fig2, ncol=1, align='hv', rel_heights=c(1, .2))
+```
+
+
+
+
+
+
+
