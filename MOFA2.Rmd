@@ -202,11 +202,19 @@ MOFAobject <- prepare_mofa(
 )
 
 outfile = file.path(getwd(),"model.hdf5")
-MOFAobject.trained <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
+model <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
 ```
 
+```{r plots}
+plot_variance_explained(model, x="view", y="factor")
+```
 
-
-
+```{r}
+plot_factor(model, 
+  factor = 1:3,
+  # color_by = "age",
+  # shape_by = "condition"
+)
+```
 
 
