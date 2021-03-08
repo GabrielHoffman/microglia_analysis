@@ -1,0 +1,97 @@
+
+
+
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(RColorBrewer)
+
+df = fread("a6d56e4a-b98b-4a21-90d0-d36b1e7b1ce2_InOCR_caSNP_pp0.01_hg19_DF_FEATURE_zscore.tsv.gz")
+
+# I am little concerned about ref_match
+# DeepSea is on hg19, was your VCF hg19?
+df[1:4, 1:10]
+
+
+# Get unique cell types
+cellTypes = sort(unique(sapply(strsplit(colnames(df), "\\|"), function(x) x[1])))
+
+cellTypes[grep("Mono", cellTypes)]
+
+# List of assays for this cell type
+colnames(df)[grep("Monocytes", colnames(df))]
+
+# Lets do DNase 
+assay = "Monocytes-CD14+_RO01746|DNase|None"
+
+# histogram of z-scores
+# Check direction from DeepSea model with caQTL direction
+hist(df[[assay]])
+
+
+mu = apply(df[,-c(1:8)], 2, mean)
+
+mean(df[[assay]])
+
+df_mean = data.frame(ID = names(mu), mu=scale(mu))
+df_mean$CellType = sapply(strsplit(df_mean$ID, "\\|"), function(x) x[1])
+df_mean$Assay = sapply(strsplit(df_mean$ID, "\\|"), function(x) x[2])
+df_mean$p = pnorm(df_mean$mu)
+df_mean$FDR = p.adjust(df_mean$p, "BH")
+df_mean$CT = ifelse(df_mean$FDR < 0.01, df_mean$CellType, "base") 
+
+
+# Make QQ plot
+make_qq <- function(dd, x) {
+    dd<-dd[order(dd[[x]], decreasing=TRUE), ]
+    dd$qq <- -log10(qunif(ppoints(nrow(dd)), , lower.tail = FALSE))
+    dd
+}
+
+df2 = make_qq(df_mean, "p")
+
+cols = brewer.pal(n=length(unique(df_mean$CT))-1, name="RdYlBu")
+
+
+fig = ggplot(df2, aes(x=qq, y=-log10(p), label=ifelse(FDR < 0.01, Assay, NA), color=CT)) + 
+    geom_point() + 
+    labs(x=bquote(Theoretical~-log[10]~P), y=bquote(Observed~-log[10]~P)) +
+    theme_classic() + 
+    theme(aspect.ratio=1) +
+    scale_x_continuous(expand=c(.01, 0), limits=c(0, NA)) + 
+    scale_y_continuous(expand=c(.01,0), limits=c(0, NA)) +
+    geom_abline() + 
+    scale_color_manual(name="Cell Types for FDR < 1%", values=c("black", cols)) +
+    geom_text_repel(min.segment.length=0, box.padding=.5)
+
+file = "QQ_deepSea.png"
+ggsave(file, fig)
+
+
+
+
+
+
+
+
+
+
+
+# ggplot(df2, aes(x=qq, y=-log10(p), label=ifelse(FDR < 0.01, Assay, NA), color=CT)) + 
+#     geom_point() + 
+#     labs(x=bquote(Theoretical~-log[10]~P), y=bquote(Observed~-log[10]~P)) +
+#     theme_classic() + 
+#     theme(aspect.ratio=1) +
+#     scale_x_continuous(expand=c(.01, 0), limits=c(0, NA)) + 
+#     scale_y_continuous(expand=c(.01,0), limits=c(0, NA)) +
+#     geom_abline() + 
+#     scale_color_manual(name="FDR < 1%", values=c("black", "red")) +
+#     geom_text_repel(min.segment.length=0, box.padding=1)
+
+
+
+
+
+
+
+
