@@ -33,6 +33,7 @@ suppressPackageStartupMessages({
 library(synapser)
 library(ggplot2)
 library(tidyverse)
+library(data.table)
 library(kableExtra)
 library(cowplot)
 synLogin()
@@ -44,6 +45,7 @@ knitr::opts_chunk$set(
   message=FALSE,
   error = FALSE,
   tidy = FALSE,
+  dev = c('png', 'pdf'),
   cache = TRUE)
 ```
 
@@ -56,9 +58,9 @@ df$distance.log10 = log10(abs(df$PeakToGene_dist))
 
 xmax = 5.6e5
 
-fig1 = ggplot(df, aes(distance, abs(Spearman_Rho), color=ABCscore > 0.02)) + geom_smooth(method="gam") + theme_classic() + theme(legend.position = "none") + scale_color_manual(values=c("blue", "red")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0))
+fig1 = ggplot(df, aes(distance, abs(Spearman_Rho), color=ABCscore > 0.02)) + geom_smooth(method="gam") + theme_classic() + theme(legend.position = "none") + scale_color_manual(values=c("darkgreen", "darkorange")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0))
 
-fig2 = ggplot(df, aes(distance, color=ABCscore > 0.02)) + geom_density() + theme_classic() + theme(legend.position = "none") + scale_color_manual(values=c("blue", "red")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0)) 
+fig2 = ggplot(df, aes(distance, color=ABCscore > 0.02)) + geom_density() + theme_classic() + theme(legend.position = "none") + scale_color_manual(values=c("darkgreen", "darkorange")) + scale_x_log10(limits=c(500,xmax), expand=c(0,0)) 
 
 plot_grid(fig1, fig2, ncol=1, align='hv', rel_heights=c(1, .3))
 ```
@@ -95,11 +97,31 @@ df_new[distance %in% dist.array,] %>%
   kable_styling(full_width=FALSE)
 ```
 
+Applying BH cutoff of 5% to peak-gene pairs with ABCscore > .02, pairs were separated into positive, negative and non-significant correlation.  Regression line of Rho versus log10 distance was fit within positive and negative separately.
 
+```{r slope}
+df2 = data.table(df[df$ABCscore > 0.02,])
+df2$FDR = p.adjust(df2$NonParam_SignPval, "BH")
+df2$Class = with(df2, as.character(sign((FDR < 0.05) * Spearman_Rho)))
 
+ggplot(df2, aes(distance, Spearman_Rho, color=Class)) + geom_point() + scale_color_manual(values=c("blue", "grey", "red")) + theme_classic() + theme(aspect.ratio=1) + geom_smooth(method="lm") + scale_x_log10(expand=c(0,0)) #limits=c(500,xmax)
+```
 
+```{r slope.table}
+res = lapply( unique(df2$Class), function(Cl){
+  fit = lm(Spearman_Rho ~ distance.log10, df2[Class==Cl])
+  coef(summary(fit))[2,]
+}) 
+res = do.call(rbind, res) 
+rownames(res) = unique(df2$Class)
 
+res %>%
+  kable(caption="Slope within each subset") %>% 
+  kable_styling(full_width=FALSE)
 
+# one sided test
+pnorm(res[, 3], 0, 1)
+```
 
 
 
