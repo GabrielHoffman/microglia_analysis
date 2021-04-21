@@ -1,0 +1,552 @@
+---
+title: "CIT analysis"
+subtitle: ''
+author: "Developed by [Gabriel Hoffman](http://gabrielhoffman.github.io/)"
+date: "Run on `r Sys.time()`"
+documentclass: article
+output: 
+  html_document:
+  toc: true
+  smart: false
+---
+
+
+<!---
+
+cd /hpc/users/hoffmg01/work/mmQTL
+# rm -rf cit_analysis_cache/
+ml git pandoc 
+git pull
+R
+
+system("git pull")
+
+
+rmarkdown::render("cit_analysis.Rmd")
+
+
+
+--->
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages({
+library(data.table)
+library(ggplot2)
+library(viridis)
+library(cowplot)
+library(GenomicRanges)
+library(ggrepel)
+library(AnnotationHub)
+library(ensembldb)
+library(cit)
+library(VariantAnnotation)
+library(limma)
+library(zenith)
+library(synapser)
+})
+
+synLogin()
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning=FALSE,
+  message=FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  dev = c('png', 'pdf'),
+  cache = TRUE)
+```
+
+
+```{r functions}
+# For ENSEMBL id ENSG00000279457.4, return ENSG00000279457
+trim_ensembl_ids = function(x){
+  gsub("(.*)\\.(.*)", "\\1", x) 
+}
+
+# Add column Symbol using column gene_id storing ENSEMBL id
+getGeneSymbol = function( df, column="row.names"){
+
+  if( ! is(df, "data.frame") ){
+    df = as.data.frame(df)
+  }
+
+  # Load ENSEMBL v96 database
+  # see https://www.bioconductor.org/packages/release/bioc/vignettes/ensembldb/inst/doc/ensembldb.html#10_getting_or_building_ensdb_databasespackages
+  ah <- AnnotationHub()
+  ensdb = ah[["AH69187"]] # ENSEMBL v96
+
+  if( column == "row.names"){    
+    geneID = rownames(df)
+  }else{
+    geneID = df[[column]]
+  }
+
+  ensIDs = trim_ensembl_ids( geneID )
+
+  geneSymbol = mapIds(ensdb, keys=ensIDs, keytype="GENEID", column="GENENAME")
+  df$Symbol = geneSymbol
+
+  entrez = mapIds(ensdb, keys=ensIDs, keytype="GENEID", column="ENTREZID")
+  df$Entrez = entrez
+
+  df_info = ensembldb::select(ensdb, keys=ensIDs, keytype="GENEID", column=c("SEQNAME", "GENESEQSTART", "GENESEQEND"))
+
+  # df2 = merge( data.frame(GENEID = ensIDs, stringsAsFactors=FALSE), chroms, by='GENEID')
+
+  idx = match(ensIDs, df_info$GENEID)
+  # df$Chrom = c()
+  df$Chrom = df_info$SEQNAME[idx]
+  # df$Start = c()
+  df$Start = df_info$GENESEQSTART[idx]
+  # df$End = c()
+  df$End = df_info$GENESEQEND[idx]
+
+  df
+}
+
+# Compute two dimensional density
+get_density <- function(x, y, n = 250) {
+  dens <- MASS::kde2d(x = x, y = y, n = n)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+```
+
+```{r read.xQTL}
+# caQTL fine-mapping results # old syn24201357
+df_caqtl = fread( synGet('syn24911652')$path, header=FALSE)
+colnames(df_caqtl) = c("Chr", "Peak", "eQTL_order", "Variant", "PIP")
+df_caqtl[,Chr := c()]
+setkey(df_caqtl, 'Variant')
+df_caqtl_best = df_caqtl[,.SD[which.max(PIP),],by="Variant"]
+
+# peak location
+df_peak = fread( synGet('syn24201356')$path )
+colnames(df_peak) = c("Chr", "start", "end", 'Peak')
+gr_peak = with(df_peak, GRanges( Chr, IRanges(start, end, name=Peak)))
+
+
+# eQTL fine-mapping results
+df_eqtl = fread( synGet('syn24178479')$path )
+colnames(df_eqtl)[5] = "PIP"
+df_eqtl[,Chr := c()]
+df_eqtl = getGeneSymbol(df_eqtl , "Gene")
+setkey(df_eqtl, 'Variant')
+df_eqtl_best = df_eqtl[,.SD[which.max(PIP),],by="Variant"]
+
+# location of genes
+df_gene = getGeneSymbol( df_eqtl[,data.frame(Gene = unique(Gene))], "Gene")
+gr_gene = with(df_gene, GRanges(Chrom, IRanges(Start, End, name=Gene)))
+
+# ABC links
+df_abc = readRDS( synGet('syn24346713')$path )$ALL_CPM1
+# df_abc = df_abc[df_abc$ABC.Score > .1,]
+
+# Merge eQTL and caQTL
+# only merge when both a gene and peak have a candidate causal variant
+df_merge = merge(df_eqtl, df_caqtl_best, by="Variant")
+df_merge[is.na(PIP.x), PIP.x:=0]
+df_merge[is.na(PIP.y), PIP.y:=0]
+df_merge[,eQTL_order.x:=c()]
+df_merge[,eQTL_order.y:=c()]
+df_merge[,combo := paste(Peak, Gene, sep='_') ]
+```
+
+```{r variant.position}
+df_position = fread( synGet('syn24911783')$path )
+gr_position = with(df_position, GRanges(V1, IRanges(V2, V3, name=V4)))
+
+df_merge[,prod:=PIP.x*PIP.y]
+df_sort = df_merge[order(prod, decreasing=TRUE),]
+varID = df_sort[prod > .01,Variant]
+```
+
+
+
+
+
+```{r read.data}
+# read ATAC-seq data
+#-------------------
+chromAccess = readRDS("/sc/arion/projects/Microglia/atacseq/step_qc_analyses/Model1_ATACseq_norm__QuantPerMig_BIC_4in0.05_CPM_1in0.2_BBrandom_atFDR_0.05/files/KeepDxResidualized_matrix.RDs")
+
+# read gene expression data
+#-------------------
+geneExpr <- readRDS("/sc/arion/projects/Microglia/rnaseq/step_qc_analyses//NotStrict_SampQC_Model1_gene_norm__QuantPerMig_BIC_4in0.05_CPM_1in0.2_BBrandom_atFDR_0.05/KeepDxResidualized_matrix.RDs")
+
+geneInfo = data.table(Gene = rownames(geneExpr))
+geneInfo = getGeneSymbol( geneInfo, "Gene")
+
+# read genotype data
+#-------------------
+genotypeVCF = "/sc/arion/projects/Microglia/genotyping/Combined_Phase1and2/Merged_Chr1toX_FixedNames.vcf.gz"
+
+param <- ScanVcfParam(which=gr_position[1]) 
+genoObj.tmp = readVcf( genotypeVCF, "hg38", param)
+
+# read sample metadata
+#-------------------
+df_metadata = fread(synGet('syn24967684')$path)
+
+# keep samples present in all 3 assays
+i = with(df_metadata, 	Patient_ID %in% colnames(genoObj.tmp) &
+						Original_RNAseqName %in% colnames(geneExpr) &
+						Original_ATACseqName %in% colnames(chromAccess)	)
+df_metadata = df_metadata[i,]
+
+# read genotype data for this subset of individuals
+param <- ScanVcfParam(which=gr_position[varID], samples = df_metadata$Patient_ID) 
+genoObj = readVcf( genotypeVCF, "hg38", param)
+X_geno = geno(genoObj)$DS
+
+# ATAC-seq: sort in same order as df_metdata
+i = match(df_metadata$Original_ATACseqName, colnames(chromAccess))
+chromAccess = chromAccess[,i]
+
+# RNA-seq: sort in same order as df_metdata
+i = match(df_metadata$Original_RNAseqName, colnames(geneExpr))
+geneExpr = geneExpr[,i]
+
+# RNA-seq: sort in same order as df_metdata
+i = match(df_metadata$Patient_ID, colnames(X_geno))
+X_geno = X_geno[,i]
+```
+
+## Cit analysis
+```{r cit.analysis}
+
+# Only perform analysis when Genes, Peaks, Variants that are loaded
+df_sort_sub = df_sort[Gene %in% rownames(geneExpr) & 
+					  Peak %in% rownames(chromAccess) &
+					  Variant %in% rownames(X_geno),]
+df_sort_sub = df_sort_sub[,.SD[which.max(prod),],by="combo"] 
+
+
+# CIT with permutations
+ss = ncol(X_geno)
+n.perm = 5000
+perm.index = matrix(NA, nrow=ss, ncol=n.perm )
+for( j in 1:ncol(perm.index) ) perm.index[, j] = sample( 1:ss )
+     
+res.lst = mclapply( 1:nrow(df_sort_sub[prod > 0.01,]), function(i){
+
+	message(i)
+	X_snp = X_geno[df_sort_sub$Variant[i],]
+	X_peak = chromAccess[df_sort_sub$Peak[i],]
+	X_expr = geneExpr[df_sort_sub$Gene[i],]
+
+	# SNP -> Y_OCR -> Y_gene (forward)
+	res.for = cit.cp( X_snp, X_peak, X_expr, perm.index=perm.index, n.perm=n.perm)
+
+	# SNP -> Y_gene -> Y_OCR (reverse)
+	res.rev  = cit.cp( X_snp, X_expr, X_peak, perm.index=perm.index, n.perm=n.perm)
+
+	info = data.frame( 	Variant = df_sort_sub$Variant[i],
+						Peak 	= df_sort_sub$Peak[i],
+						Gene 	= df_sort_sub$Gene[i])
+
+	list( forward = res.for, 
+		reverse = res.rev,
+		info = info)
+}, mc.cores=24)
+
+res.forward = lapply(res.lst, function(x) x$forward)
+res.reverse = lapply(res.lst, function(x) x$reverse)
+info = do.call(rbind, lapply(res.lst, function(x) x$info))
+
+res.fdr.forward = fdr.cit( res.forward )
+res.fdr.reverse = fdr.cit( res.reverse )
+
+info$p.cit.forward = res.fdr.forward$p.cit
+info$p.cit.reverse = res.fdr.reverse$p.cit
+
+info$q.cit.forward = res.fdr.forward$q.cit
+info$q.cit.reverse = res.fdr.reverse$q.cit
+
+info = getGeneSymbol( info, "Gene")
+```
+
+```{r plot.results}
+info$density <- get_density(-log10(info$p.cit.forward), -log10(info$p.cit.reverse), n = 60)
+
+
+cutoff = 0.10
+
+info$shape = 16
+info$shape[info$q.cit.forward < cutoff] = 17
+info$shape[info$q.cit.reverse < cutoff] = 17
+table(info$shape)
+
+
+info$score = with(info, -log10(p.cit.forward) - -log10(p.cit.reverse))
+
+# lim = -log10(with(info, min(c(p.cit.forward, p.cit.reverse))))
+# ggplot(info, aes(-log10(p.cit.forward), -log10(p.cit.reverse), color=density)) + geom_point(shape=info$shape) + theme_classic() + geom_abline(color="red") + theme(aspect.ratio=1) + xlim(0, lim) + ylim(0, lim) + xlab(bquote(Forward~-log[10]~p[CIT])) + ylab(bquote(Reverse~-log[10]~p[CIT])) + scale_color_viridis() 
+
+
+lim = -log10(with(info, min(c(p.cit.forward, p.cit.reverse))))
+maxScore = max(abs(info$score))
+ggplot(info, aes(-log10(p.cit.forward), -log10(p.cit.reverse), color=score, label=ifelse(shape!=16, Symbol, NA))) + 
+	geom_abline(color="black") + 
+	geom_point(shape=info$shape) + 
+	theme_classic() + 
+	theme(aspect.ratio=1, plot.title = element_text(hjust = 0.5)) + 
+	xlim(0, lim) + ylim(0, lim) + 
+	xlab(bquote(Forward~-log[10]~p[CIT])) + 
+	ylab(bquote(Reverse~-log[10]~p[CIT])) + 
+	scale_color_gradient2(name = "Support for direction", low="blue", mid="grey", high="red", limits=c(-maxScore, maxScore)) + 
+	geom_text_repel() + 
+	ggtitle("Directionality of effect")
+
+```
+
+
+
+```{r plot.trio}
+library(igraph)
+
+i = 1
+
+edges = data.frame(rbind( c(1, 2), c(2, 3)))
+colnames(edges) = c("source", "destination")
+
+nodes = data.frame(id = 1:3, label = c(df_sort_sub$Variant[i],
+	df_sort_sub$Peak[i], df_sort_sub$Symbol[i]))
+
+net <- graph_from_data_frame(d = edges, vertices = nodes, directed = TRUE)
+
+main = with(info[i,], paste("q.forward = ", format(q.cit.forward, digits=3), "\n", 
+				"q.reverse =", format(q.cit.reverse, digits=3)))
+
+
+plot(net, main = main)
+```
+
+Symbol.get = 'EPHA1-AS1'
+
+ensGene = df_sort_sub$Gene[which(df_sort_sub$Symbol == Symbol.get)]
+
+X_expr.gene = geneExpr[ensGene,]
+
+cvalues = cor(X_expr.gene, t(geneExpr))
+
+X_snp = X_geno['rs11771145',]
+
+cor.test( X_snp, X_expr.gene)
+
+df = mclapply( which(abs(cvalues) > .3), function(i){
+
+	if(i %% 10 == 0) message(i)
+	# SNP -> Y_OCR -> Y_gene (forward)
+	res.for = cit.cp( X_snp, X_expr.gene, geneExpr[i,])
+
+	data.frame(Gene = rownames(geneExpr)[i], t(res.for))
+}, mc.cores=24)
+df = do.call(rbind, df)
+df = df[df$Gene!=ensGene,]
+df = df[order(df$p_cit),]
+range(df$p_cit)
+
+
+
+
+i=1
+X_snp = X_geno[df_sort_sub$Variant[i],]
+X_peak = chromAccess[df_sort_sub$Peak[i],]
+X_expr = geneExpr[df_sort_sub$Gene[i],]
+
+cor.test( X_snp, X_expr)
+
+vobj = geneExpr[rownames(geneExpr)!='ENSG00000229153',]
+
+library(limma)
+dsgn = model.matrix(~X_peak)
+fit = lmFit(vobj, dsgn)
+fit = eBayes(fit)
+
+
+
+
+# Load Gene Ontology database 
+go.gs = get_GeneOntology()
+   
+# convert from GeneSetCollection to list used by camera and zenith
+geneSets_GO = recodeToList( go.gs )
+
+# Map from Ensembl genes in geneSets_GO to 
+# from trimmed Ensembl names from RNA-seq data 
+index = ids2indices( geneSets_GO, trim_ensembl_ids(rownames(fit)))
+   
+# filter by size of gene set
+n_genes_in = 10
+index = index[sapply(index, length) >= n_genes_in]
+
+# Run camera
+res_camera = camera( vobj, index, dsgn, inter.gene.cor=NA)
+
+head(res_camera)
+
+
+
+
+# try in CMC
+
+
+# brema
+library(synapser)
+library(data.table)
+synLogin()
+
+file = synGet("syn23225473")$path
+
+cmd = paste("zgrep 'ENSG00000229153'", file )
+
+df = fread(cmd=cmd)
+
+
+
+
+
+
+
+
+
+
+
+```{r cache=FALSE}
+knitr::knit_exit()
+```
+
+
+
+
+
+
+
+
+```{r cit, eval=FALSE}
+
+# Evalute forward and reverse model, alowing for covariates
+eval_regulatory_direction = function(SNP, Y_OCR, Y_gene, covariates=NULL){
+
+	# SNP -> Y_OCR -> Y_gene (forward)
+	res1 = cit.cp( SNP, Y_OCR, Y_gene, covariates)
+
+	# SNP -> Y_gene -> Y_OCR (reverse)
+	res2 = cit.cp( SNP, Y_gene, Y_OCR, covariates)
+
+	data.frame( p.forward = res1['p_cit'],
+				p.reverse = res2['p_cit'])
+}
+
+
+df_res = mclapply( 1:nrow(df_sort_sub[prod > 0,]), function(i){
+
+	message(i)
+	X_snp = X_geno[df_sort_sub$Variant[i],]
+	X_peak = chromAccess[df_sort_sub$Peak[i],]
+	X_expr = geneExpr[df_sort_sub$Gene[i],]
+
+	# df = data.frame(X_snp, X_peak, X_expr )
+
+	res = eval_regulatory_direction( X_snp, X_peak, X_expr)
+
+	data.frame( Variant = df_sort_sub$Variant[i],
+				Peak 	= df_sort_sub$Peak[i],
+				Gene 	= df_sort_sub$Gene[i],
+				res	)
+}, mc.cores=48)
+df_res = do.call(rbind, df_res)
+
+ggplot(df_res, aes(-log10(p.forward), -log10(p.reverse))) + geom_point() + theme_classic() + geom_abline(color="red")
+
+# Want to test variant, EPHA1 and EPHA1-AS1
+###########################################
+
+# association with EPHA1 are very weak
+df_eqtl[Symbol %in% c('EPHA1', 'EPHA1-AS1'),]
+
+# EPHA1  ENSG00000146904
+# EPHA1-AS1 ENSG00000229153
+
+# c('ENSG00000146904', 'ENSG00000229153') %in% rownames(geneExpr) 
+
+geneInfo[Symbol=='EPHA1', Gene]
+
+
+
+param <- ScanVcfParam(which=gr_position[rsid], samples = df_metadata$Patient_ID) 
+genoObj = readVcf( genotypeVCF, "hg38", param)
+X_geno = geno(genoObj)$DS
+
+rsid = 'rs11771145'
+X_snp = X_geno[rsid,]
+X_expr1 = geneExpr[geneInfo[Symbol=='EPHA1-AS1', Gene],]
+X_expr2 = geneExpr[geneInfo[Symbol=='EPHA1', Gene],]
+
+
+df = data.frame(rs11771145 = X_snp, 
+	'EPHA1-AS1' = X_expr1, 
+	EPHA1 = X_expr2 )
+cor(df)
+
+res = eval_regulatory_direction( X_snp, X_expr1, X_expr2)
+
+Which cell type are these correlated in?????
+
+summary(lm(X_expr1 ~ X_snp))
+
+
+
+
+
+# Link peak to peak
+###################
+
+setkey(df_caqtl, "Variant")
+
+df = df_caqtl[1:1000,][,.SD[length(unique(Peak)) > 1,],by="Variant"]
+
+
+Variant = 'rs10034935'
+P1 = 'Peak_136600'
+P2 = 'Peak_136601'
+
+param <- ScanVcfParam(which=gr_position[Variant], samples = df_metadata$Patient_ID) 
+genoObj = readVcf( genotypeVCF, "hg38", param)
+X_geno = geno(genoObj)$DS
+
+
+
+X_snp = X_geno[Variant,]
+X_peak1 = chromAccess[P1,]
+X_peak2 = chromAccess[P2,]
+
+# SNP -> Y_OCR -> Y_gene (forward)
+res.for = cit.cp( X_snp, X_peak1, X_peak2)
+
+# SNP -> Y_gene -> Y_OCR (reverse)
+res.rev  = cit.cp( X_snp, X_peak2, X_peak1)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
