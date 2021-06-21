@@ -1,0 +1,161 @@
+---
+title: "CIT analysis"
+subtitle: ''
+author: "Developed by [Gabriel Hoffman](http://gabrielhoffman.github.io/)"
+date: "Run on `r Sys.time()`"
+documentclass: article
+output: 
+  html_document:
+  toc: true
+  smart: false
+---
+
+
+<!---
+
+cd /hpc/users/hoffmg01/work/mmQTL
+# rm -rf cit_analysis_cache/
+ml git pandoc 
+git pull
+R
+
+system("git pull")
+
+
+rmarkdown::render("cit_analysis.Rmd")
+
+
+/hpc/users/hoffmg01/work/microglia_analysis
+--->
+
+```{r load.packages}
+suppressPackageStartupMessages({
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(ggbio)
+library(org.Hs.eg.db)
+library(GenomicFeatures)
+library(dplyr)
+library(stringr) 
+library(knitr)
+library(kableExtra)
+library(decorate)
+library(MeSH.db)
+library(synapser)
+library(data.table)
+library(GenomicRegions)
+library(GenomicFeatures)
+library(ggplot2)
+library(ggbio)
+})
+
+synLogin()
+
+src = '/hpc/users/hoffmg01/build2/mmQTL'
+
+source(paste0(src, "/make_plots.R"))
+source(paste0(src, "/plot_genes.R"))
+```
+
+
+```{r caQTL.data}
+# Read SNP locations
+df_snp = fread( synGet('syn24912590')$path )
+colnames(df_snp) = c("Chr", "Position0", "Position", 'ID')
+df_snp[,Position0 := c()]
+df_snp[,Chr:=gsub("^chr", '', Chr)]
+setkey(df_snp, 'ID')
+gc()
+
+# Read xQTL p-values
+df_caqtl = fread( synGet('syn25000646')$path, header=TRUE )
+df_caQTL[,Chr:=gsub("^chr", '', Chr)]
+colnames(df_caQTL)[colnames(df_caQTL) == 'caQTL_order'] = 'eQTL_order'
+df_caQTL[,log10.p.value := -1*pnorm(abs(Z_score_fixed), 0, 1, lower.tail=FALSE, log.p=TRUE) / log(10) - log10(2)]
+df_caQTL[,Z_score_fixed:=c()]
+df_caQTL[,Z_score_random:=c()]
+colnames(df_caQTL)[colnames(df_caQTL)=="Peak"] = "Gene"
+setkey(df_caQTL, "Variant")
+gc()
+
+# Include Position in df_caQTL
+df_caQTL = merge(df_caQTL, df_snp[,c("Position", "ID")], by.x="Variant", by.y="ID")
+setkey(df_caQTL, Position)
+gc()
+```
+
+
+```{r eQTL.data}
+# Read SNP locations
+df_snp = fread( synGet('syn24196924')$path )
+colnames(df_snp) = c("Chr", "Position0", "Position", 'ID')
+df_snp[,Position0 := c()]
+df_snp[,Chr:=gsub("^chr", '', Chr)]
+setkey(df_snp, 'ID')
+gc()
+
+# Read xQTL p-values
+df_eqtl = fread( synGet('syn24182390')$path, header=FALSE )
+df_eqtl[,V7:=c(),]
+cn = fread(synGet('syn24182390')$path, nrow=0)
+colnames(df_eqtl) = colnames(cn)
+df_eqtl[,Chr:=gsub("^chr", '', Chr)]
+
+df_eqtl[,log10.p.value := -1*pnorm(Z_score_random, 0, 1, lower.tail=FALSE, log.p=TRUE) / log(10) - log10(2)]
+df_eqtl[,Z_score_fixed:=c()]
+df_eqtl[,Z_score_random:=c()]
+setkey(df_eqtl, "Variant")
+gc()
+
+# Include Position in df_eqtl
+df_eqtl = merge(df_eqtl, df_snp[,c("Position", "ID")], by.x="Variant", by.y="ID")
+setkey(df_eqtl, Position)
+gc()
+```			
+
+```{r load.data}
+
+# Load AD GWAS
+AD_GWAS_summary = fread("/sc/arion/projects/roussp01a/mads_atacseq/data/gwas/alz2noapoe/AD_sumstats_Jansenetal_NO_APO_E.txt.gz", header=FALSE)
+colnames(AD_GWAS_summary) = c('uniqID.a1a2',     'CHR',     'BP',       'A1',    'A2',     'SNP',     'Z' ,      'P',       'Nsum',    'Neff' ,   'dir',     'MAF',     'BETA',    'SE')
+
+# Load Gene locations
+gff_collapse = "/sc/arion/projects/psychencode/resources/gene_models/ensembl_collapse/EnsDb.Hsapiens.v75.merged.gff3"
+db.ensdb.v75 = makeTxDbFromGFF( gff_collapse )
+
+# Plot Locations
+window = 100000
+center = 143110762
+wh = GRanges("chr7", IRanges(center-window, center+window))
+```
+
+
+```{r make.plots, fig.height=6}
+
+df = AD_GWAS_summary[CHR == 7,]
+df = df[(BP >= center-window) & (BP <= center+window),]
+
+ymax = -log10(min(df$P))
+
+fig_AD_GWAS = ggplot(df, aes(BP, -log10(P))) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03))
+
+fig_genebody = plotEnsGenes_gg( EnsDb.Hsapiens.v75, start(wh), end(wh), seqnames(wh), splice_variants=FALSE, non_coding=TRUE)
+
+
+fig_track = tracks( "AD GWAS" = fig_AD_GWAS, 
+					"Genes"   = fig_genebody,
+					xlim = wh,
+					padding = unit(-.65, "lines"),
+					label.bg.fill="navy", label.text.color="white",
+					# heights=c(.9,.5,.5,.5,.4),
+					theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank()),
+						title="EPHA1-AS1" )
+ggsave(fig_track, file=file)
+```
+
+
+
+
+
+
