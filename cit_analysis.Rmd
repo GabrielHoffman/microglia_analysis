@@ -325,7 +325,7 @@ main = with(info[i,], paste("q.forward = ", format(q.cit.forward, digits=3), "\n
 plot(net, main = main)
 ```
 
-```{r cache=FALSE}
+```{r exit, cache=FALSE}
 knitr::knit_exit()
 ```
 
