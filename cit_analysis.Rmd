@@ -329,6 +329,8 @@ plot(net, main = main)
 knitr::knit_exit()
 ```
 
+
+```{r test}
 Symbol.get = 'EPHA1-AS1'
 
 ensGene = df_sort_sub$Gene[which(df_sort_sub$Symbol == Symbol.get)]
@@ -410,7 +412,7 @@ cmd = paste("zgrep 'ENSG00000229153'", file )
 
 df = fread(cmd=cmd)
 
-
+```
 
 
 
