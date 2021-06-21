@@ -15,14 +15,14 @@ output:
 
 cd /hpc/users/hoffmg01/work/mmQTL
 # rm -rf cit_analysis_cache/
-ml git pandoc 
+ml git proj gdal geos pandoc
 git pull
 R
 
 system("git pull")
 
 
-rmarkdown::render("cit_analysis.Rmd")
+rmarkdown::render("EPHA1_AS1.Rmd")
 
 
 /hpc/users/hoffmg01/work/microglia_analysis
@@ -44,7 +44,6 @@ library(decorate)
 library(MeSH.db)
 library(synapser)
 library(data.table)
-library(GenomicRegions)
 library(GenomicFeatures)
 library(ggplot2)
 library(ggbio)
