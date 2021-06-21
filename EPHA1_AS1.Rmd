@@ -113,6 +113,42 @@ setkey(df_eqtl, Position)
 gc()
 ```			
 
+
+```{r causalDB}
+# read CAUSALdb 
+###############
+# /Users/gabrielhoffman/workspace/scripts/compositeQTL/causaDB.R
+
+# This combines the results from CausalDB: http://mulinlab.tmu.edu.cn/causaldb/index.html
+causalDB = readRDS( synGet('syn24178554')$path )
+
+# set keys for faster searching
+setkey(causalDB[["credible_set"]], "meta_id")
+setkey(causalDB[['meta_info']], "ID")
+
+find_study = function(causalDB, phenotypeText){
+	causalDB[['meta_info']][grep(phenotypeText, causalDB[['meta_info']][['MeSH_term']]),]
+}
+
+get_credible_set = function(causalDB, studyID, gr){
+	# use keys for speed
+	df = causalDB[["credible_set"]][studyID,]
+	df2 = causalDB[['meta_info']][studyID,c('ID', 'Trait')]
+	df = merge(df, df2, by.x="meta_id", by.y="ID")
+
+	# if GenomeRanges object is specified, only return results in that range
+	if( ! missing(gr) ){
+		seqlevelsStyle(gr) = "NCBI"
+		df_sub = df[CHR == as.vector(seqnames(gr)),]
+		df_sub = df_sub[(BP > start(gr)) & (BP < end(gr)),]
+
+		return( df_sub )
+	}
+
+	return( df )
+}
+```
+
 ```{r load.data}
 
 # Load AD GWAS
