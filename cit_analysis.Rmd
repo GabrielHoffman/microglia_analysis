@@ -325,6 +325,10 @@ main = with(info[i,], paste("q.forward = ", format(q.cit.forward, digits=3), "\n
 plot(net, main = main)
 ```
 
+```{r cache=FALSE}
+knitr::knit_exit()
+```
+
 Symbol.get = 'EPHA1-AS1'
 
 ensGene = df_sort_sub$Gene[which(df_sort_sub$Symbol == Symbol.get)]
