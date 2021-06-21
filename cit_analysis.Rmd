@@ -357,6 +357,7 @@ for(k in 1:4){
 	i = idx[k,1]
 	j = idx[k,2]
 	C[i,j] = cor.test(X[,i], X[,j])$p.value
+	C[j,i] = C[i,j]
 }
 
 corrplot(C, col="black", type = "upper", method="number")
