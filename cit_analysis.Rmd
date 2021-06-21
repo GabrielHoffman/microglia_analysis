@@ -25,7 +25,7 @@ system("git pull")
 rmarkdown::render("cit_analysis.Rmd")
 
 
-
+/hpc/users/hoffmg01/work/microglia_analysis
 --->
 
 ```{r setup, include=FALSE}
@@ -324,6 +324,48 @@ main = with(info[i,], paste("q.forward = ", format(q.cit.forward, digits=3), "\n
 
 plot(net, main = main)
 ```
+
+
+## Correlation between SNP and gene
+```{r correlation}
+
+X_snp = data.frame('rs11771145' = X_geno["rs11771145",])
+X_peak = data.frame('Peak_188003' = chromAccess["Peak_188003",])
+
+X_EPHA1 = data.frame('EPHA1' = geneExpr[geneInfo[Symbol == "EPHA1",Gene],])
+X_EPHA1_AS1 = data.frame('EPHA1-AS1' = geneExpr[geneInfo[Symbol == "EPHA1-AS1",Gene],])
+
+X = cbind(X_snp, X_peak, X_EPHA1_AS1, X_EPHA1)
+
+# saveRDS(X, file="X.RDS")
+
+X = readRDS("X.RDS")
+library(corrplot)
+library(colorRamps)
+
+col <- colorRampPalette(c("darkblue", "white", "darkred"))
+
+
+corrplot(cor(X), col=col(100), type = "lower")
+
+C = diag(NA, 4)
+colnames(C) = colnames(X)
+rownames(C) = colnames(X)
+idx = t(combn(4,2))
+
+for(k in 1:4){
+	i = idx[k,1]
+	j = idx[k,2]
+	C[i,j] = cor.test(X[,i], X[,j])$p.value
+}
+
+corrplot(C, col="black", type = "upper", method="number")
+
+C
+```
+
+
+
 
 ```{r exit, cache=FALSE}
 knitr::knit_exit()
