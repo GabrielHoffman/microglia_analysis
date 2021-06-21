@@ -13,8 +13,7 @@ output:
 
 <!---
 
-cd /hpc/users/hoffmg01/work/mmQTL
-# rm -rf cit_analysis_cache/
+/hpc/users/hoffmg01/work/microglia_analysis
 ml git proj gdal geos pandoc
 git pull
 R
@@ -25,7 +24,6 @@ system("git pull")
 rmarkdown::render("EPHA1_AS1.Rmd")
 
 
-/hpc/users/hoffmg01/work/microglia_analysis
 --->
 
 ```{r load.packages}
@@ -82,6 +80,22 @@ gc()
 df_caQTL = merge(df_caQTL, df_snp[,c("Position", "ID")], by.x="Variant", by.y="ID")
 setkey(df_caQTL, Position)
 gc()
+
+# Read fine-mapping results
+df_finemap = fread( synGet('syn24964518')$path)
+# colnames(df_finemap) = c("Chr", "Gene", "eQTL_order", "Variant", "PIP")
+colnames(df_finemap)[colnames(df_finemap)=="PP"] = "PIP"
+df_finemap[,Chr := c()]
+setkey(df_finemap, 'Variant')
+
+# Merg SNP locations and fine-mapping
+df_finemap = merge(df_finemap, df_snp, by.x="Variant", by.y="ID")
+setkey(df_finemap, Position)
+
+df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
+
+
+
 ```
 
 
@@ -111,6 +125,18 @@ gc()
 df_eqtl = merge(df_eqtl, df_snp[,c("Position", "ID")], by.x="Variant", by.y="ID")
 setkey(df_eqtl, Position)
 gc()
+
+# Read fine-mapping results
+df_finemap = fread( synGet('syn24178479')$path )
+colnames(df_finemap)[5] = "PIP"
+df_finemap[,Chr := c()]
+setkey(df_finemap, 'Variant')
+
+# Merg SNPe locations and fine-mapping
+df_finemap = merge(df_finemap, df_snp, by.x="Variant", by.y="ID")
+setkey(df_finemap, Position)
+
+df_eqtl = merge(df_eqtl, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
 ```			
 
 
@@ -126,27 +152,10 @@ causalDB = readRDS( synGet('syn24178554')$path )
 setkey(causalDB[["credible_set"]], "meta_id")
 setkey(causalDB[['meta_info']], "ID")
 
-find_study = function(causalDB, phenotypeText){
-	causalDB[['meta_info']][grep(phenotypeText, causalDB[['meta_info']][['MeSH_term']]),]
-}
-
-get_credible_set = function(causalDB, studyID, gr){
-	# use keys for speed
-	df = causalDB[["credible_set"]][studyID,]
-	df2 = causalDB[['meta_info']][studyID,c('ID', 'Trait')]
-	df = merge(df, df2, by.x="meta_id", by.y="ID")
-
-	# if GenomeRanges object is specified, only return results in that range
-	if( ! missing(gr) ){
-		seqlevelsStyle(gr) = "NCBI"
-		df_sub = df[CHR == as.vector(seqnames(gr)),]
-		df_sub = df_sub[(BP > start(gr)) & (BP < end(gr)),]
-
-		return( df_sub )
-	}
-
-	return( df )
-}
+# Find which study to plot
+df_causaldb = data.table(causalDB[["credible_set"]])
+df_causaldb[,Variant:=paste0('rs', rsID)]
+df_ad_finemap = df_causaldb[meta_id == 'OT344',]
 ```
 
 ```{r load.data}
@@ -155,38 +164,67 @@ get_credible_set = function(causalDB, studyID, gr){
 AD_GWAS_summary = fread("/sc/arion/projects/roussp01a/mads_atacseq/data/gwas/alz2noapoe/AD_sumstats_Jansenetal_NO_APO_E.txt.gz", header=FALSE)
 colnames(AD_GWAS_summary) = c('uniqID.a1a2',     'CHR',     'BP',       'A1',    'A2',     'SNP',     'Z' ,      'P',       'Nsum',    'Neff' ,   'dir',     'MAF',     'BETA',    'SE')
 
-# Load Gene locations
-gff_collapse = "/sc/arion/projects/psychencode/resources/gene_models/ensembl_collapse/EnsDb.Hsapiens.v75.merged.gff3"
-db.ensdb.v75 = makeTxDbFromGFF( gff_collapse )
-
 # Plot Locations
 window = 100000
 center = 143110762
 wh = GRanges("chr7", IRanges(center-window, center+window))
+
+ensGene = 'ENSG00000229153'
+peakID = "Peak_188003"
+
 ```
 
 
 ```{r make.plots, fig.height=6}
 
+# AD GWAS
 df = AD_GWAS_summary[CHR == 7,]
 df = df[(BP >= center-window) & (BP <= center+window),]
 
+df2 = merge(df, df_ad_finemap[,c('Variant', 'FINEMAP')], by.x="SNP", by.y="Variant", all.x=TRUE)
+
 ymax = -log10(min(df$P))
 
-fig_AD_GWAS = ggplot(df, aes(BP, -log10(P))) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03))
 
-fig_genebody = plotEnsGenes_gg( EnsDb.Hsapiens.v75, start(wh), end(wh), seqnames(wh), splice_variants=FALSE, non_coding=TRUE)
+fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=!is.na(FINEMAP))) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P))
+
+
+# eQTL
+df = df_eqtl[Chr == 7,]
+df = df[(Position >= center-window) & (Position <= center+window),]
+df = df[Gene==ensGene,]
+
+ymax = max(df$log10.p.value)
+fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=!is.na(PIP))) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) 
+# caQTL
+df = df_caQTL[Chr == 7,]
+df = df[(Position >= center-window) & (Position <= center+window),]
+df = df[Gene==peakID,]
+
+ymax = max(df$log10.p.value)
+fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=!is.na(PIP))) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P))
+
+
+
+# Load Gene locations
+gff_collapse = "/sc/arion/projects/psychencode/resources/gene_models/ensembl_collapse/EnsDb.Hsapiens.v75.merged.gff3"
+db.ensdb.v75 = makeTxDbFromGFF( gff_collapse )
+
+fig_genebody = plotEnsGenes_gg( EnsDb.Hsapiens.v75, start(wh), end(wh), seqnames(wh), splice_variants=FALSE, non_coding=FALSE)
 
 
 fig_track = tracks( "AD GWAS" = fig_AD_GWAS, 
-					"Genes"   = fig_genebody,
+										"eQTL" 		= fig_eQTL,
+										"caQTL" 		= fig_caQTL,
+					# "Genes"   = fig_genebody,
 					xlim = wh,
 					padding = unit(-.65, "lines"),
 					label.bg.fill="navy", label.text.color="white",
 					# heights=c(.9,.5,.5,.5,.4),
 					theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank()),
 						title="EPHA1-AS1" )
-ggsave(fig_track, file=file)
+ggsave(fig_track, file="./test.pdf")
+
 ```
 
 
