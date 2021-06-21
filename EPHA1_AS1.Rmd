@@ -68,7 +68,7 @@ setkey(df_snp, 'ID')
 gc()
 
 # Read xQTL p-values
-df_caqtl = fread( synGet('syn25000646')$path, header=TRUE )
+df_caQTL = fread( synGet('syn25000646')$path, header=TRUE )
 df_caQTL[,Chr:=gsub("^chr", '', Chr)]
 colnames(df_caQTL)[colnames(df_caQTL) == 'caQTL_order'] = 'eQTL_order'
 df_caQTL[,log10.p.value := -1*pnorm(abs(Z_score_fixed), 0, 1, lower.tail=FALSE, log.p=TRUE) / log(10) - log10(2)]
