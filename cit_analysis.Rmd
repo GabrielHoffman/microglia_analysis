@@ -353,7 +353,7 @@ colnames(C) = colnames(X)
 rownames(C) = colnames(X)
 idx = t(combn(4,2))
 
-for(k in 1:4){
+for(k in 1:nrow(idx)){
 	i = idx[k,1]
 	j = idx[k,2]
 	C[i,j] = cor.test(X[,i], X[,j])$p.value
