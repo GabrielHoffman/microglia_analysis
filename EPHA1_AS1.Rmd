@@ -61,7 +61,8 @@ knitr::opts_chunk$set(
   error = FALSE,
   tidy = FALSE,
   dev = c('png', 'pdf'),
-  cache = TRUE)
+  cache = TRUE,
+  cache.lazy = FALSE)
 ```
 
 
