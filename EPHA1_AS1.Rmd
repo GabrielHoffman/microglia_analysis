@@ -314,7 +314,7 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 
 
 
-```{r load.data}
+```{r make_plots}
 # Plot Locations
 #EPHA1-AS1
 window = 80000
@@ -332,6 +332,10 @@ ensGene = 'ENSG00000073921'
 peakID = "Peak_30728"
 
 df_caQTL[Variant == SNP,]
+
+
+plot_triple(SNP, ensGene, peakID, "test.pdf")
+
 
 ```
 
