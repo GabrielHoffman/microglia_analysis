@@ -31,7 +31,6 @@ suppressPackageStartupMessages({
 library(data.table)
 library(ggplot2)
 library(ggrepel)
-library(ggbio)
 library(org.Hs.eg.db)
 library(GenomicFeatures)
 library(dplyr)
@@ -72,7 +71,7 @@ colnames(df_snp) = c("Chr", "Position0", "Position", 'ID')
 df_snp[,Position0 := c()]
 df_snp[,Chr:=gsub("^chr", '', Chr)]
 setkey(df_snp, 'ID')
-gc()
+# gc()
 
 # Read xQTL p-values
 df_caQTL = fread( synGet('syn25000646')$path, header=TRUE )
@@ -104,46 +103,10 @@ setkey(df_finemap, Position)
 df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
 
 # get peak locations
-df_peak_location = fread(synGet('syn24201356')$path)
+df_peak_location = fread(synGet('syn25912056')$path)
 colnames(df_peak_location) = c("Chr", "start", "end", "name")
 gr_peak_location = with(df_peak_location, GRanges(paste0("chr", Chr), IRanges(start, end, name=name)))
 ```
-
-
-
-
-
-
-library(data.table)
-library(synapser)
-library(GenomicRanges)
-library(ggplot2)
-synLogin()
-
-gr = GRanges('chr11', IRanges(85787875,85947875))
-
-
-
-
-edges = c(start = 85787875,end = 85947875)
-
-
-df = data.frame(start = c(85901437, 85941410), end=c(85901997, 85941706), status=c(0,1))
-
-df$start = pmax(df$start, edges[1])
-df$end = pmin(df$end, edges[2])
-
-
-fig = ggplot(df) + geom_segment(aes(x=start, y=0.25, xend = end, yend=0.75, color=as.character(status))) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + theme_void() + scale_color_manual(values = c("black", "red"))
-
-ggsave(fig, file="./test.pdf")
-
-
-
-
-
-
-
 
 
 ```{r eQTL.data}
@@ -228,19 +191,20 @@ AD_GWAS_summary = fread("/sc/arion/projects/roussp01a/mads_atacseq/data/gwas/alz
 colnames(AD_GWAS_summary) = c('uniqID.a1a2', 'CHR', 'BP', 'A1', 'A2', 'SNP', 'Z', 'P', 'Nsum', 'Neff' , 'dir', 'MAF', 'BETA', 'SE')
 ```
 
-
+# save(list=ls(), file="AD_all.RDATA")
+# load("AD_all.RDATA")
 
 ```{r make.plots}
-plot_triple = function(SNP, ensGene, peakID, fileOut){
+plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 
 	chrom = as.numeric(unique(df_eqtl[Variant == SNP,'Chr']))
 	center = as.numeric(unique(df_eqtl[Variant == SNP,'Position']))
 
-	window = 80000
 	wh = GRanges(paste0("chr", chrom), IRanges(center-window, center+window))
 
 	Symbol = df_fm_eQTL[Gene == ensGene,unique(Symbol)]
 
+	edges = c(start(wh), end(wh))
 
 	# AD GWAS
 	df = AD_GWAS_summary[CHR == chrom,]
@@ -251,7 +215,7 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 
 	ymax = -log10(min(df$P))
 
-	fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=isCandSet+1.0 )) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+	fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=isCandSet+1.0 )) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
 
 
 	# eQTL
@@ -262,7 +226,7 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 	df[,isCandSet:=!is.na(PIP)]
 
 	ymax = max(df$log10.p.value)
-	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
 
 	# caQTL
 	#######
@@ -272,7 +236,7 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 	df[,isCandSet:=!is.na(PIP)]
 
 	ymax = max(df$log10.p.value)
-	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
 
 	# pkgload::unload("EnsDb.Hsapiens.v75")
 	# library(EnsDb.Hsapiens.v75)
@@ -283,22 +247,25 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 	######
 
 	gr_loc = gr_peak_location[findOverlaps(wh, gr_peak_location)@to]
-	df_loc = as.data.frame(gr_loc)
 
-	df_loc$status = 0
-	df_loc$status[rownames(df_loc) == peakID] = 1
+	fig_ATAC = ggplot() + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = c("black", "red")) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
+	if( length(gr_loc) > 0){
+		df_loc = as.data.frame(gr_loc)
 
-	df_loc$start = pmax(df_loc$start, edges[1])
-	df_loc$end = pmin(df_loc$end, edges[2])
+		df_loc$status = 0
+		df_loc$status[rownames(df_loc) == peakID] = 1
 
-	fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=.5, xend = end, yend=0.5, color=as.character(status)), size=2) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = c("black", "red")) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
+		df_loc$start = pmax(df_loc$start, edges[1])
+		df_loc$end = pmin(df_loc$end, edges[2])
 
+		fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=.5, xend = end, yend=0.5, color=as.character(status)), size=2) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = c("black", "red")) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
+	}
 
 	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS, 
 											"eQTL" 		= fig_eQTL,
 											"caQTL" 	= fig_caQTL,
 											"Genes"   = fig_genebody,
-											"ATAC" 		= fig_ATAC,
+											"OCR" 		= fig_ATAC,
 											xlim = wh,
 											padding = unit(-.65, "lines"),
 											label.bg.fill="navy", label.text.color="white",
@@ -306,7 +273,7 @@ plot_triple = function(SNP, ensGene, peakID, fileOut){
 											theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
 	fig_track@mutable['Genes'] = FALSE
-	fig_track@mutable['ATAC'] = FALSE
+	fig_track@mutable['OCR'] = FALSE
 	ggbio::ggsave(fig_track, file=fileOut)
 }
 ```
@@ -321,8 +288,17 @@ window = 80000
 center = 143110762
 wh = GRanges("chr7", IRanges(center-window, center+window))
 
+SNP = 'rs11771145'
 ensGene = 'ENSG00000229153'
 peakID = "Peak_188003"
+
+plot_triple(SNP, ensGene, peakID, window = 200000, "test.pdf")
+
+gr_peak_location[peakID]
+
+df_caQTL[Gene==peakID,]
+
+df_caQTL[(Variant==SNP)&(Gene==peakID)]
 
 
 
@@ -338,6 +314,60 @@ plot_triple(SNP, ensGene, peakID, "test.pdf")
 
 
 ```
+
+
+```{r test}
+library(data.table)
+library(synapser)
+
+synLogin()
+
+
+SNP = 'rs11771145'
+peakID = "Peak_188003"
+
+
+
+df_peak_location = fread(synGet('syn24201356')$path)
+colnames(df_peak_location) = c("Chr", "start", "end", "name")
+
+
+df_caQTL = fread( synGet('syn25000646')$path, header=TRUE )
+
+
+
+
+df_peak_location[name==peakID,]
+
+df_caQTL[(Variant==SNP)&(Peak==peakID)]
+
+gr_peak_location[peakID]
+
+
+
+library(liftOver)
+library(rtracklayer)
+
+path = system.file(package="liftOver", "extdata", "hg38ToHg19.over.chain")
+ch = import.chain(path)
+
+
+df_peak_location = fread(synGet('syn24201356')$path)
+colnames(df_peak_location) = c("Chr", "start", "end", "name")
+gr_peak_location = with(df_peak_location, GRanges(paste0("chr", Chr), IRanges(start, end, name=name)))
+
+seqlevelsStyle(gr_peak_location) = "UCSC"  # necessary
+gr_peak_location = liftOver(gr_peak_location, ch)
+gr_peak_location = unlist(gr_peak_location)
+
+```
+
+
+
+
+
+
+
 
 
 
