@@ -44,7 +44,6 @@ library(synapser)
 library(data.table)
 library(GenomicFeatures)
 library(ggplot2)
-library(ggbio)
 })
 
 synLogin()
@@ -103,7 +102,48 @@ df_finemap = merge(df_finemap, df_snp, by.x="Variant", by.y="ID")
 setkey(df_finemap, Position)
 
 df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
+
+# get peak locations
+df_peak_location = fread(synGet('syn24201356')$path)
+colnames(df_peak_location) = c("Chr", "start", "end", "name")
+gr_peak_location = with(df_peak_location, GRanges(paste0("chr", Chr), IRanges(start, end, name=name)))
 ```
+
+
+
+
+
+
+library(data.table)
+library(synapser)
+library(GenomicRanges)
+library(ggplot2)
+synLogin()
+
+gr = GRanges('chr11', IRanges(85787875,85947875))
+
+
+
+
+edges = c(start = 85787875,end = 85947875)
+
+
+df = data.frame(start = c(85901437, 85941410), end=c(85901997, 85941706), status=c(0,1))
+
+df$start = pmax(df$start, edges[1])
+df$end = pmin(df$end, edges[2])
+
+
+fig = ggplot(df) + geom_segment(aes(x=start, y=0.25, xend = end, yend=0.75, color=as.character(status))) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + theme_void() + scale_color_manual(values = c("black", "red"))
+
+ggsave(fig, file="./test.pdf")
+
+
+
+
+
+
+
 
 
 ```{r eQTL.data}
@@ -174,7 +214,6 @@ df_fm_eQTL = fread("/hpc/users/hoffmg01/work/mmQTL/microglia/eqtl/figures/finema
 df_fm_caQTL = df_fm_caQTL[PMID %in% c(29777097, 30617256),]
 df_fm_eQTL = df_fm_eQTL[PMID %in% c(29777097, 30617256),]
 
-
 df_fm_caQTL = merge(df_fm_caQTL, unique(df_caQTL[,c("Variant", "Chr", "Position")]),by="Variant")
 df_fm_eQTL = merge(df_fm_eQTL, unique(df_eqtl[,c("Variant", "Chr", "Position")]),by="Variant")
 ```
@@ -184,11 +223,98 @@ df_fm_eQTL = merge(df_fm_eQTL, unique(df_eqtl[,c("Variant", "Chr", "Position")])
 
 
 ```{r load.data}
-
 # Load AD GWAS
 AD_GWAS_summary = fread("/sc/arion/projects/roussp01a/mads_atacseq/data/gwas/alz2noapoe/AD_sumstats_Jansenetal_NO_APO_E.txt.gz", header=FALSE)
 colnames(AD_GWAS_summary) = c('uniqID.a1a2', 'CHR', 'BP', 'A1', 'A2', 'SNP', 'Z', 'P', 'Nsum', 'Neff' , 'dir', 'MAF', 'BETA', 'SE')
+```
 
+
+
+```{r make.plots}
+plot_triple = function(SNP, ensGene, peakID, fileOut){
+
+	chrom = as.numeric(unique(df_eqtl[Variant == SNP,'Chr']))
+	center = as.numeric(unique(df_eqtl[Variant == SNP,'Position']))
+
+	window = 80000
+	wh = GRanges(paste0("chr", chrom), IRanges(center-window, center+window))
+
+	Symbol = df_fm_eQTL[Gene == ensGene,unique(Symbol)]
+
+
+	# AD GWAS
+	df = AD_GWAS_summary[CHR == chrom,]
+	df = df[(BP >= center-window) & (BP <= center+window),]
+
+	df2 = merge(df, df_ad_finemap[,c('Variant', 'FINEMAP')], by.x="SNP", by.y="Variant", all.x=TRUE)
+	df2[,isCandSet :=!is.na(FINEMAP)]
+
+	ymax = -log10(min(df$P))
+
+	fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=isCandSet+1.0 )) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+
+
+	# eQTL
+	######
+	df = df_eqtl[Chr == chrom,]
+	df = df[(Position >= center-window) & (Position <= center+window),]
+	df = df[Gene==ensGene,]
+	df[,isCandSet:=!is.na(PIP)]
+
+	ymax = max(df$log10.p.value)
+	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+
+	# caQTL
+	#######
+	df = df_caQTL[Chr == chrom,]
+	df = df[(Position >= center-window) & (Position <= center+window),]
+	df = df[Gene==peakID,]
+	df[,isCandSet:=!is.na(PIP)]
+
+	ymax = max(df$log10.p.value)
+	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+
+	# pkgload::unload("EnsDb.Hsapiens.v75")
+	# library(EnsDb.Hsapiens.v75)
+
+	fig_genebody = plotEnsGenes_gg( EnsDb.Hsapiens.v75, start(wh), end(wh), seqnames(wh), splice_variants=FALSE, non_coding=TRUE)
+
+	# ATAC
+	######
+
+	gr_loc = gr_peak_location[findOverlaps(wh, gr_peak_location)@to]
+	df_loc = as.data.frame(gr_loc)
+
+	df_loc$status = 0
+	df_loc$status[rownames(df_loc) == peakID] = 1
+
+	df_loc$start = pmax(df_loc$start, edges[1])
+	df_loc$end = pmin(df_loc$end, edges[2])
+
+	fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=.5, xend = end, yend=0.5, color=as.character(status)), size=2) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = c("black", "red")) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
+
+
+	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS, 
+											"eQTL" 		= fig_eQTL,
+											"caQTL" 	= fig_caQTL,
+											"Genes"   = fig_genebody,
+											"ATAC" 		= fig_ATAC,
+											xlim = wh,
+											padding = unit(-.65, "lines"),
+											label.bg.fill="navy", label.text.color="white",
+											heights=c(1, 1, 1, .3, .1),
+											theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
+							title=Symbol )
+	fig_track@mutable['Genes'] = FALSE
+	fig_track@mutable['ATAC'] = FALSE
+	ggbio::ggsave(fig_track, file=fileOut)
+}
+```
+
+
+
+
+```{r load.data}
 # Plot Locations
 #EPHA1-AS1
 window = 80000
@@ -205,87 +331,9 @@ SNP = 'rs10792832'
 ensGene = 'ENSG00000073921'
 peakID = "Peak_30728"
 
-chrom = as.numeric(unique(df_eqtl[Variant == SNP,'Chr']))
-center = as.numeric(unique(df_eqtl[Variant == SNP,'Position']))
-
-window = 80000
-wh = GRanges(paste0("chr", chrom), IRanges(center-window, center+window))
-
-
-
+df_caQTL[Variant == SNP,]
 
 ```
-
-
-df2[SNP=='rs11771145',]
-
-df_ad_finemap[BP==143110762,]
-
-
-
-```{r make.plots, fig.height=6}
-
-# AD GWAS
-df = AD_GWAS_summary[CHR == chrom,]
-df = df[(BP >= center-window) & (BP <= center+window),]
-
-df2 = merge(df, df_ad_finemap[,c('Variant', 'FINEMAP')], by.x="SNP", by.y="Variant", all.x=TRUE)
-df2[,isCandSet :=!is.na(FINEMAP)]
-
-ymax = -log10(min(df$P))
-
-fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=isCandSet+1.0 )) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
-
-
-# eQTL
-######
-df = df_eqtl[Chr == chrom,]
-df = df[(Position >= center-window) & (Position <= center+window),]
-df = df[Gene==ensGene,]
-df[,isCandSet:=!is.na(PIP)]
-
-ymax = max(df$log10.p.value)
-fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
-
-# caQTL
-#######
-df = df_caQTL[Chr == chrom,]
-df = df[(Position >= center-window) & (Position <= center+window),]
-df = df[Gene==peakID,]
-df[,isCandSet:=!is.na(PIP)]
-
-ymax = max(df$log10.p.value)
-fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=c(center-window, center+window), expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
-
-
-# Load Gene locations
-# gff_collapse = "/sc/arion/projects/psychencode/resources/gene_models/ensembl_collapse/EnsDb.Hsapiens.v75.merged.gff3"
-# db.ensdb.v75 = makeTxDbFromGFF( gff_collapse )
-
-# pkgload::unload("EnsDb.Hsapiens.v75")
-# library(EnsDb.Hsapiens.v75)
-
-fig_genebody = plotEnsGenes_gg( EnsDb.Hsapiens.v75, start(wh), end(wh), seqnames(wh), splice_variants=FALSE, non_coding=TRUE)
-
-
-fig_track = tracks( "AD GWAS" = fig_AD_GWAS, 
-										"eQTL" 		= fig_eQTL,
-										"caQTL" 	= fig_caQTL,
-										"Genes"   = fig_genebody,
-										xlim = wh,
-										padding = unit(-.65, "lines"),
-										label.bg.fill="navy", label.text.color="white",
-										heights=c(1, 1, 1, .3),
-										theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
-						title="EPHA1-AS1" )
-fig_track@mutable['Genes'] = FALSE
-ggsave(fig_track, file="./test.pdf")
-
-
-
-
-```
-
 
 
 
