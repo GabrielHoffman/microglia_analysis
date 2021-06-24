@@ -105,7 +105,7 @@ df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Varia
 # get peak locations
 df_peak_location = fread(synGet('syn25912056')$path)
 colnames(df_peak_location) = c("Chr", "start", "end", "name")
-gr_peak_location = with(df_peak_location, GRanges(paste0("chr", Chr), IRanges(start, end, name=name)))
+gr_peak_location = with(df_peak_location, GRanges(Chr, IRanges(start, end, name=name)))
 ```
 
 
@@ -174,15 +174,12 @@ df_ad_finemap = df_causaldb[meta_id == 'OT344',]
 df_fm_caQTL = fread("/hpc/users/hoffmg01/work/mmQTL/microglia/caqtl/figures/finemap_caQTL.csv")
 df_fm_eQTL = fread("/hpc/users/hoffmg01/work/mmQTL/microglia/eqtl/figures/finemap_eQTL.csv")
 
-df_fm_caQTL = df_fm_caQTL[PMID %in% c(29777097, 30617256),]
-df_fm_eQTL = df_fm_eQTL[PMID %in% c(29777097, 30617256),]
+df_fm_caQTL = df_fm_caQTL[PMID %in% c(30617256),] # 29777097
+df_fm_eQTL = df_fm_eQTL[PMID %in% c(30617256),]# 29777097
 
 df_fm_caQTL = merge(df_fm_caQTL, unique(df_caQTL[,c("Variant", "Chr", "Position")]),by="Variant")
 df_fm_eQTL = merge(df_fm_eQTL, unique(df_eqtl[,c("Variant", "Chr", "Position")]),by="Variant")
 ```
-
-
-
 
 
 ```{r load.data}
@@ -202,7 +199,8 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 
 	wh = GRanges(paste0("chr", chrom), IRanges(center-window, center+window))
 
-	Symbol = df_fm_eQTL[Gene == ensGene,unique(Symbol)]
+	geneInfo = select(EnsDb.Hsapiens.v75, keys=ensGene, keytype="GENEID", column=c('GENENAME', 'GENEBIOTYPE'))
+	Symbol = geneInfo$GENENAME
 
 	edges = c(start(wh), end(wh))
 
@@ -225,8 +223,21 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	df = df[Gene==ensGene,]
 	df[,isCandSet:=!is.na(PIP)]
 
+	sizeRng = c(.8)
+	if( any(df$isCandSet) ){
+		sizeRng = append(sizeRng, 2)
+	}
+
+	# Get CLPP from eQTL
+	clpp_e = df_fm_eQTL[(Variant==SNP)&(Gene==ensGene),data.table(Author=`Consortium/author`, CLPP=PIP.prod)]
+	clpp_e = paste(with(clpp_e, paste0('CLPP=', format(CLPP, digits=2), ' ')), collapse="\n")
+
+	if(clpp_e == "CLPP= "){
+		clpp_e = ''
+	}
+
 	ymax = max(df$log10.p.value)
-	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_e, vjust=1, hjust=1)
 
 	# caQTL
 	#######
@@ -235,8 +246,21 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	df = df[Gene==peakID,]
 	df[,isCandSet:=!is.na(PIP)]
 
+	sizeRng = c(.8)
+	if( any(df$isCandSet) ){
+		sizeRng = append(sizeRng, 2)
+	}
+
+	# Get CLPP from caQTL
+	clpp_ca = df_fm_caQTL[(Variant==SNP)&(Gene==peakID),data.table(Author=`Consortium/author`, CLPP=PIP.prod)]
+	clpp_ca = paste(with(clpp_ca, paste0('CLPP=', format(CLPP, digits=2), ' ')), collapse="\n")
+
+	if(clpp_ca == "CLPP= "){
+		clpp_ca = ''
+	}
+
 	ymax = max(df$log10.p.value)
-	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
+	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_ca, vjust=1, hjust=1)
 
 	# pkgload::unload("EnsDb.Hsapiens.v75")
 	# library(EnsDb.Hsapiens.v75)
@@ -252,13 +276,24 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	if( length(gr_loc) > 0){
 		df_loc = as.data.frame(gr_loc)
 
+		col = c("black", "red")
 		df_loc$status = 0
 		df_loc$status[rownames(df_loc) == peakID] = 1
+		df_loc$status = factor(as.character(df_loc$status), c(0, 1))
+
+		col = c()
+		if( any(df_loc$status==0)){
+			col = append(col, "black")
+		}
+		if( any(df_loc$status==1)){
+			col = append(col, "red")
+		}
 
 		df_loc$start = pmax(df_loc$start, edges[1])
 		df_loc$end = pmin(df_loc$end, edges[2])
 
-		fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=.5, xend = end, yend=0.5, color=as.character(status)), size=2) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = c("black", "red")) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
+
+		fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=1, xend = end, yend=1, color=status), size=4) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = col) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
 	}
 
 	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS, 
@@ -283,93 +318,86 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 
 ```{r make_plots}
 # Plot Locations
-#EPHA1-AS1
-window = 80000
-center = 143110762
-wh = GRanges("chr7", IRanges(center-window, center+window))
+# EPHA1-AS1
 
 SNP = 'rs11771145'
 ensGene = 'ENSG00000229153'
 peakID = "Peak_188003"
-
-plot_triple(SNP, ensGene, peakID, window = 200000, "test.pdf")
-
-gr_peak_location[peakID]
-
-df_caQTL[Gene==peakID,]
-
-df_caQTL[(Variant==SNP)&(Gene==peakID)]
-
+plot_triple(SNP, ensGene, peakID, window = 80000, "figures/EPHA1-AS1.pdf")
 
 
 # PICALM
 SNP = 'rs10792832'
 ensGene = 'ENSG00000073921'
 peakID = "Peak_30728"
+plot_triple(SNP, ensGene, peakID, window = 150000, "figures/PICALM.pdf")
 
-df_caQTL[Variant == SNP,]
+# For each eQTL
+for(i in 1:nrow(df_fm_eQTL)){
+
+		SNP = df_fm_eQTL[i,Variant]
+		ensGene = df_fm_eQTL[i,Gene]
+		Symbol = df_fm_eQTL[i,Symbol]
+
+		# get peak where this SNP has the lowest p-value
+		peakID = df_caQTL[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+		file = paste0("figures/",Symbol, "_fm.pdf")
+		plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
 
 
-plot_triple(SNP, ensGene, peakID, "test.pdf")
+# For each caQTL
+for(i in 1:nrow(df_fm_caQTL)){
 
+		SNP = df_fm_caQTL[i,Variant]
+		peakID = df_fm_caQTL[i,Gene]
+
+		# get peak where this SNP has the lowest p-value
+		ensGene = df_eqtl[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+		file = paste0("figures/",peakID, "_fm.pdf")
+		plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
+
+
+
+file = "/sc/arion/projects/Microglia/Combined_RNAseq_ATACseq/GWAS_loci_investigations/GWAS_loci_analyses/Novel_Loci/NovelLoci_locations_RK_6_24_21.csv"
+df_focus = fread(file)
+
+# For each eQTL
+df_focus_gene = df_focus[Gene_ID !='',]
+
+for(i in 1:nrow(df_focus_gene)){
+
+	SNP = df_focus_gene[i,SNP_ID]
+	ensGene = df_focus_gene[i,Gene_ID]
+	Symbol = df_focus_gene[i,GeneName]
+
+	# get peak where this SNP has the lowest p-value
+	peakID =	df_caQTL[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+	file = paste0("figures/",Symbol, "_", SNP, "_fm.pdf")
+	plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
+
+
+
+# For each caQTL
+df_focus_peak = df_focus[Peak_ID !='',]
+
+for(i in 1:nrow(df_focus_peak)){
+
+		SNP = df_focus_peak[i,SNP_ID]
+		peakID = df_focus_peak[i,Peak_ID]
+
+		# get peak where this SNP has the lowest p-value
+		ensGene = df_eqtl[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+		file = paste0("figures/",peakID, "_", SNP, "_fm.pdf")
+		plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
 
 ```
-
-
-```{r test}
-library(data.table)
-library(synapser)
-
-synLogin()
-
-
-SNP = 'rs11771145'
-peakID = "Peak_188003"
-
-
-
-df_peak_location = fread(synGet('syn24201356')$path)
-colnames(df_peak_location) = c("Chr", "start", "end", "name")
-
-
-df_caQTL = fread( synGet('syn25000646')$path, header=TRUE )
-
-
-
-
-df_peak_location[name==peakID,]
-
-df_caQTL[(Variant==SNP)&(Peak==peakID)]
-
-gr_peak_location[peakID]
-
-
-
-library(liftOver)
-library(rtracklayer)
-
-path = system.file(package="liftOver", "extdata", "hg38ToHg19.over.chain")
-ch = import.chain(path)
-
-
-df_peak_location = fread(synGet('syn24201356')$path)
-colnames(df_peak_location) = c("Chr", "start", "end", "name")
-gr_peak_location = with(df_peak_location, GRanges(paste0("chr", Chr), IRanges(start, end, name=name)))
-
-seqlevelsStyle(gr_peak_location) = "UCSC"  # necessary
-gr_peak_location = liftOver(gr_peak_location, ch)
-gr_peak_location = unlist(gr_peak_location)
-
-```
-
-
-
-
-
-
-
-
-
-
 
 
