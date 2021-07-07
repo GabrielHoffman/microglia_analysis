@@ -211,7 +211,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	df2 = merge(df, df_ad_finemap[,c('Variant', 'FINEMAP')], by.x="SNP", by.y="Variant", all.x=TRUE)
 	df2[,isCandSet :=!is.na(FINEMAP)]
 
-	ymax = -log10(min(df$P))
+	ymax = max( 5, -log10(min(df$P)))
 
 	fig_AD_GWAS = ggplot(df2, aes(BP, -log10(P), color=!is.na(FINEMAP), size=isCandSet+1.0 )) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=c(.8, 2), breaks=c(1.1))
 
@@ -236,7 +236,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 		clpp_e = ''
 	}
 
-	ymax = max(df$log10.p.value)
+	ymax = max( 5, max(df$log10.p.value))
 	fig_eQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1.0)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_e, vjust=1, hjust=1)
 
 	# caQTL
@@ -261,7 +261,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 			clpp_ca = ''
 		}
 
-		ymax = max(df$log10.p.value)
+		ymax = max( 5, max(df$log10.p.value))
 		fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_ca, vjust=1, hjust=1)
 		}else{
 			fig_caQTL = ggplot()
