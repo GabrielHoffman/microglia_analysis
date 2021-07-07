@@ -103,7 +103,7 @@ setkey(df_finemap, Position)
 df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
 
 # get peak locations
-df_peak_location = fread(synGet('syn25912056')$path)
+df_peak_location = fread(synGet('syn25944661')$path)
 colnames(df_peak_location) = c("Chr", "start", "end", "name")
 gr_peak_location = with(df_peak_location, GRanges(Chr, IRanges(start, end, name=name)))
 ```
@@ -244,24 +244,28 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	df = df_caQTL[Chr == chrom,]
 	df = df[(Position >= center-window) & (Position <= center+window),]
 	df = df[Gene==peakID,]
-	df[,isCandSet:=!is.na(PIP)]
 
-	sizeRng = c(.8)
-	if( any(df$isCandSet) ){
-		sizeRng = append(sizeRng, 2)
-	}
+	if( nrow(df) > 0){
+		df[,isCandSet:=!is.na(PIP)]
 
-	# Get CLPP from caQTL
-	clpp_ca = df_fm_caQTL[(Variant==SNP)&(Gene==peakID),data.table(Author=`Consortium/author`, CLPP=PIP.prod)]
-	clpp_ca = paste(with(clpp_ca, paste0('CLPP=', format(CLPP, digits=2), ' ')), collapse="\n")
+		sizeRng = c(.8)
+		if( any(df$isCandSet) ){
+			sizeRng = append(sizeRng, 2)
+		}
 
-	if(clpp_ca == "CLPP= "){
-		clpp_ca = ''
-	}
+		# Get CLPP from caQTL
+		clpp_ca = df_fm_caQTL[(Variant==SNP)&(Gene==peakID),data.table(Author=`Consortium/author`, CLPP=PIP.prod)]
+		clpp_ca = paste(with(clpp_ca, paste0('CLPP=', format(CLPP, digits=2), ' ')), collapse="\n")
 
-	ymax = max(df$log10.p.value)
-	fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_ca, vjust=1, hjust=1)
+		if(clpp_ca == "CLPP= "){
+			clpp_ca = ''
+		}
 
+		ymax = max(df$log10.p.value)
+		fig_caQTL = ggplot(df, aes(Position, log10.p.value, color=!is.na(PIP), size=isCandSet+1)) + geom_point() + scale_x_continuous(limits=edges, expand=c(0,0)) + scale_y_continuous(expand=c(0, 0), limits=c(0,ymax*1.03)) + scale_color_manual(values=c("black", "red")) + ylab(bquote(-log[10]~P)) + scale_size(range=sizeRng, breaks=c(1.1)) + annotate("text",  x=edges[2], y = ymax, label = clpp_ca, vjust=1, hjust=1)
+		}else{
+			fig_caQTL = ggplot()
+		}
 	# pkgload::unload("EnsDb.Hsapiens.v75")
 	# library(EnsDb.Hsapiens.v75)
 
@@ -377,6 +381,9 @@ for(i in 1:nrow(df_focus_gene)){
 	# get peak where this SNP has the lowest p-value
 	peakID =	df_caQTL[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
 
+	if( length(peakID) == 0){
+		peakID = ''
+	}
 	file = paste0("figures/",Symbol, "_", SNP, "_fm.pdf")
 	plot_triple(SNP, ensGene, peakID, window = 80000, file)
 }
