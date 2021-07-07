@@ -107,17 +107,18 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 		fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=1, xend = end, yend=1, color=status), size=4) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = col) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
 	}
 
-	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS + ggbio::scale_x_sequnit(), 
-											"eQTL" 		= fig_eQTL# + ggbio::scale_x_sequnit(),
-											"caQTL" 	= fig_caQTL #+ ggbio::scale_x_sequnit(),
-											"Genes"   = fig_genebody #+ ggbio::scale_x_sequnit(),
-											"OCR" 		= fig_ATAC #+ ggbio::scale_x_sequnit(),
-											xlim = wh,
-											padding = unit(-0.65, "lines"),
-											label.bg.fill="navy", label.text.color="white",
-											heights=c(1, 1, 1, .2, .2),
-											label.text.cex = c(1,1,1, .8),
-											theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
+	 # + ggbio::scale_x_sequnit(),
+	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS,
+							"eQTL" 		= fig_eQTL,
+							"caQTL" 	= fig_caQTL ,
+							"Genes"   = fig_genebody ,
+							"OCR" 		= fig_ATAC ,
+							xlim = wh,
+							padding = unit(-0.65, "lines"),
+							label.bg.fill="navy", label.text.color="white",
+							heights=c(1, 1, 1, .2, .2),
+							label.text.cex = c(1,1,1, .8),
+							theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
 	fig_track@mutable['Genes'] = FALSE
 	fig_track@mutable['OCR'] = FALSE
