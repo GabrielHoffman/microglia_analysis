@@ -107,7 +107,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 		fig_ATAC = ggplot(df_loc) + geom_segment(aes(x=start, y=1, xend = end, yend=1, color=status), size=4) + scale_x_continuous(expand=c(0,0), limits=edges) + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_manual(values = col) + theme_bw() + theme(legend.position = "none", axis.title=element_blank(), axis.ticks.y=element_blank(), axis.line.y=element_blank(), panel.grid=element_blank(), axis.text.y=element_blank(),panel.background = element_blank(), strip.background = element_blank(), rect = element_rect(fill="white", linetype=0))
 	}
 
-	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS + scale_x_sequnit(), 
+	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS + ggbio::scale_x_sequnit(), 
 											"eQTL" 		= fig_eQTL + ggbio::scale_x_sequnit(),
 											"caQTL" 	= fig_caQTL + ggbio::scale_x_sequnit(),
 											"Genes"   = fig_genebody + ggbio::scale_x_sequnit(),
