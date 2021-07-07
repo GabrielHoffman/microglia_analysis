@@ -113,9 +113,9 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 											"Genes"   = fig_genebody + ggbio::scale_x_sequnit(),
 											"OCR" 		= fig_ATAC + ggbio::scale_x_sequnit(),
 											xlim = wh,
-											# padding = unit(-.65, "lines"),
+											padding = unit(-1, "lines"),
 											label.bg.fill="navy", label.text.color="white",
-											heights=c(1, 1, 1, .4, .3),
+											heights=c(1, 1, 1, .2, .2),
 											label.text.cex = c(1,1,1, .8, .6),
 											theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
