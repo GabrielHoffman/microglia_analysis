@@ -117,10 +117,10 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 							padding = unit(-0.65, "lines"),
 							label.bg.fill="navy", label.text.color="white",
 							heights=c(1, 1, 1, .2, .2),
-							label.text.cex = c(1,1,1, .8),
+							label.text.cex = c(1,1,1, .8, .8),
 							theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
 	fig_track@mutable['Genes'] = FALSE
 	fig_track@mutable['OCR'] = FALSE
-	ggbio::ggsave(fig_track, file=fileOut, width=6, height=7)
+	ggbio::ggsave(fig_track, file=fileOut, width=7, height=7)
 }
