@@ -108,10 +108,10 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	}
 
 	fig_track = ggbio::tracks( "AD GWAS" = fig_AD_GWAS + scale_x_sequnit(), 
-											"eQTL" 		= fig_eQTL + scale_x_sequnit(),
-											"caQTL" 	= fig_caQTL + scale_x_sequnit(),
-											"Genes"   = fig_genebody + scale_x_sequnit(),
-											"OCR" 		= fig_ATAC + scale_x_sequnit(),
+											"eQTL" 		= fig_eQTL + ggbio::scale_x_sequnit(),
+											"caQTL" 	= fig_caQTL + ggbio::scale_x_sequnit(),
+											"Genes"   = fig_genebody + ggbio::scale_x_sequnit(),
+											"OCR" 		= fig_ATAC + ggbio::scale_x_sequnit(),
 											xlim = wh,
 											# padding = unit(-.65, "lines"),
 											label.bg.fill="navy", label.text.color="white",
