@@ -117,7 +117,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 							padding = unit(-0.65, "lines"),
 							label.bg.fill="navy", label.text.color="white",
 							heights=c(1, 1, 1, .3, .1),
-							label.text.cex = c(1,1,1, .8, .1),
+							label.text.cex = c(1,1,1, .8, .1, 1),
 							theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
 	fig_track@mutable['Genes'] = FALSE
