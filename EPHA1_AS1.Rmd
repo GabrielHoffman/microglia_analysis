@@ -65,7 +65,7 @@ knitr::opts_chunk$set(
 
 
 ```{r caQTL.data}
-# Read SNP locations
+# Read SNP locations: hg19
 df_snp = fread( synGet('syn24912590')$path )
 colnames(df_snp) = c("Chr", "Position0", "Position", 'ID')
 df_snp[,Position0 := c()]
@@ -102,7 +102,7 @@ setkey(df_finemap, Position)
 
 df_caQTL = merge(df_caQTL, df_finemap[,c("Variant", "PIP", "Gene")], by=c("Variant", "Gene"), all.x=TRUE)
 
-# get peak locations
+# get peak locations: hg19
 df_peak_location = fread(synGet('syn25944661')$path)
 colnames(df_peak_location) = c("Chr", "start", "end", "name")
 gr_peak_location = with(df_peak_location, GRanges(Chr, IRanges(start, end, name=name)))
@@ -308,7 +308,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 											xlim = wh,
 											padding = unit(-.65, "lines"),
 											label.bg.fill="navy", label.text.color="white",
-											heights=c(1, 1, 1, .3, .1),
+											heights=c(1, 1, 1, .4, .3),
 											theme = theme_bw(8) + theme(legend.position="none", panel.grid.minor = element_blank(), panel.grid.major = element_blank()),
 							title=Symbol )
 	fig_track@mutable['Genes'] = FALSE
@@ -316,6 +316,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 	ggbio::ggsave(fig_track, file=fileOut)
 }
 ```
+
 
 
 
@@ -365,7 +366,7 @@ for(i in 1:nrow(df_fm_caQTL)){
 }
 
 
-
+  
 file = "/sc/arion/projects/Microglia/Combined_RNAseq_ATACseq/GWAS_loci_investigations/GWAS_loci_analyses/Novel_Loci/NovelLoci_locations_RK_6_24_21.csv"
 df_focus = fread(file)
 
