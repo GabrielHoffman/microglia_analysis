@@ -329,7 +329,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 SNP = 'rs11771145'
 ensGene = 'ENSG00000229153'
 peakID = "Peak_188003"
-plot_triple(SNP, ensGene, peakID, window = 80000, "figures/EPHA1-AS1.pdf")
+plot_triple(SNP, ensGene, peakID, window = 50000, "figures/EPHA1-AS1.pdf")
 
 
 # PICALM
