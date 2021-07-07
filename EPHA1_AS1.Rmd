@@ -116,7 +116,7 @@ colnames(df_snp) = c("Chr", "Position0", "Position", 'ID')
 df_snp[,Position0 := c()]
 df_snp[,Chr:=gsub("^chr", '', Chr)]
 setkey(df_snp, 'ID')
-gc()
+# gc()
 
 # Read xQTL p-values
 df_eqtl = fread( synGet('syn24182390')$path, header=FALSE )
@@ -129,12 +129,12 @@ df_eqtl[,log10.p.value := -1*pnorm(Z_score_random, 0, 1, lower.tail=FALSE, log.p
 df_eqtl[,Z_score_fixed:=c()]
 df_eqtl[,Z_score_random:=c()]
 setkey(df_eqtl, "Variant")
-gc()
+# gc()
 
 # Include Position in df_eqtl
 df_eqtl = merge(df_eqtl, df_snp[,c("Position", "ID")], by.x="Variant", by.y="ID")
 setkey(df_eqtl, Position)
-gc()
+# gc()
 
 # Read fine-mapping results
 df_finemap = fread( synGet('syn24178479')$path )
@@ -322,7 +322,7 @@ plot_triple = function(SNP, ensGene, peakID,window, fileOut){
 
 
 
-```{r make_plots}
+```{r make_plots, cache=FALSE}
 # Plot Locations
 # EPHA1-AS1
 
