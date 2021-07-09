@@ -197,13 +197,24 @@ colnames(AD_GWAS_summary) = c('uniqID.a1a2', 'CHR', 'BP', 'A1', 'A2', 'SNP', 'Z'
 
 
 ```{r make_plots, cache=FALSE}
+
+pkgload::unload("EnsDb.Hsapiens.v75")
+library(EnsDb.Hsapiens.v75)
+
+source("plot_triple.R")
+
 # Plot Locations
 # EPHA1-AS1
-
 SNP = 'rs11771145'
 ensGene = 'ENSG00000229153'
 peakID = "Peak_188003"
 plot_triple(SNP, ensGene, peakID, window = 50000, "figures/EPHA1-AS1.pdf")
+
+
+# system("git pull"); source("plot_triple.R")
+# plot_triple(SNP, ensGene, peakID, window = 50000, "figures/EPHA1-AS1.pdf")
+
+
 
 
 # PICALM
