@@ -326,7 +326,7 @@ plot(net, main = main)
 
 
 ## Correlation between SNP and gene
-```{r correlation}
+```{r correlation, fig.width=8, fig.heigt=7}
 
 X_snp = data.frame('rs11771145' = X_geno["rs11771145",])
 X_peak = data.frame('Peak_188003' = chromAccess["Peak_188003",])
@@ -346,7 +346,7 @@ col <- colorRampPalette(c("darkblue", "white", "darkred"))
 
 
 # corrplot(cor(X), col=col(100), type = "lower", diag=FALSE, addCoef.col = 'black',  tl.col = 'black')
-corrplot(cor(X), col=col(100),  diag=FALSE, cl.pos = 'b', tl.pos = 'd', tl.col = 'black', addCoef.col = 'black')
+corrplot(cor(X, method="spearman"), col=col(100),  diag=FALSE, cl.pos = 'b', tl.pos = 'd', tl.col = 'black', addCoef.col = 'black')
 
 C = diag(NA, 4)
 colnames(C) = colnames(X)
@@ -356,7 +356,7 @@ idx = t(combn(4,2))
 for(k in 1:nrow(idx)){
 	i = idx[k,1]
 	j = idx[k,2]
-	C[i,j] = cor.test(X[,i], X[,j])$p.value
+	C[i,j] = cor.test(X[,i], X[,j], method="spearman")$p.value
 	C[j,i] = C[i,j]
 }
 
