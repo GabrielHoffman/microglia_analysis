@@ -22,7 +22,6 @@ R
 
 system("git pull")
 
-
 rmarkdown::render("cit_analysis.Rmd")
 
 
@@ -339,7 +338,7 @@ X = cbind(X_snp, X_peak, X_EPHA1_AS1, X_EPHA1)
 
 # saveRDS(X, file="X.RDS")
 
-X = readRDS("X.RDS")
+# X = readRDS("X.RDS")
 library(corrplot)
 library(colorRamps)
 
