@@ -23,6 +23,14 @@ system("git pull")
 
 rmarkdown::render("EPHA1_AS1.Rmd")
 
+-ljasper
+/usr/bin/ld: cannot find -ltiff
+
+
+ install.packages("sf")
+
+
+ 
 
 --->
 
@@ -37,7 +45,7 @@ library(dplyr)
 library(stringr) 
 library(knitr)
 library(kableExtra)
-library(decorate)
+# library(decorate)
 library(MeSH.db)
 library(synapser)
 library(data.table)
