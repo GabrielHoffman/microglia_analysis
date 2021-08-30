@@ -193,7 +193,9 @@ colnames(AD_GWAS_summary) = c('uniqID.a1a2', 'CHR', 'BP', 'A1', 'A2', 'SNP', 'Z'
 # load("AD_all.RDATA")
 
 
-
+```{r exit, cache=FALSE}
+knitr::knit_exit()
+```
 
 
 ```{r make_plots, cache=FALSE}
@@ -276,6 +278,45 @@ for(i in 1:nrow(df_focus_gene)){
 }
 
 
+# For each caQTL
+df_focus_peak = df_focus[Peak_ID !='',]
+
+for(i in 1:nrow(df_focus_peak)){
+
+		SNP = df_focus_peak[i,SNP_ID]
+		peakID = df_focus_peak[i,Peak_ID]
+
+		# get peak where this SNP has the lowest p-value
+		ensGene = df_eqtl[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+		file = paste0("figures/",peakID, "_", SNP, "_fm.pdf")
+		plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
+
+
+# new file
+file = "/sc/arion/projects/Microglia/Combined_RNAseq_ATACseq/GWAS_loci_investigations/GWAS_loci_analyses/Novel_Loci/AD_Loci_locations_RK_7_8_21.csv"
+df_focus = fread(file)
+
+# For each eQTL
+df_focus_gene = df_focus[Gene_ID !='',]
+
+for(i in 1:nrow(df_focus_gene)){
+
+	SNP = df_focus_gene[i,SNP_ID]
+	ensGene = df_focus_gene[i,Gene_ID]
+	Symbol = df_focus_gene[i,GeneName]
+
+	# get peak where this SNP has the lowest p-value
+	peakID =	df_caQTL[Variant == SNP,.SD[which.max(log10.p.value),Gene]]
+
+	if( length(peakID) == 0){
+		peakID = ''
+	}
+	file = paste0("figures/",Symbol, "_", SNP, "_fm.pdf")
+	plot_triple(SNP, ensGene, peakID, window = 80000, file)
+}
+
 
 # For each caQTL
 df_focus_peak = df_focus[Peak_ID !='',]
@@ -291,6 +332,8 @@ for(i in 1:nrow(df_focus_peak)){
 		file = paste0("figures/",peakID, "_", SNP, "_fm.pdf")
 		plot_triple(SNP, ensGene, peakID, window = 80000, file)
 }
+
+
 
 ```
 
