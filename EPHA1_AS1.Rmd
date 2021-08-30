@@ -19,18 +19,10 @@ git pull
 R
 
 system("git pull")
-
-
 rmarkdown::render("EPHA1_AS1.Rmd")
 
--ljasper
-/usr/bin/ld: cannot find -ltiff
 
 
- install.packages("sf")
-
-
- 
 
 --->
 
