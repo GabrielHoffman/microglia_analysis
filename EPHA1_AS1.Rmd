@@ -223,7 +223,7 @@ devtools::unload("EnsDb.Hsapiens.v75")
 ensdb = EnsDb.Hsapiens.v75::EnsDb.Hsapiens.v75 # genes on hg19
 
 
-plot_combine = function(wh, ensGene, peakID, SNP){
+plot_combine = function(wh, ensGene, peakID, SNP, non_coding=FALSE, showCDB=FALSE){
 
 	# GWAS
 	fig_gwas = plotMht( gr_ad_gwas, wh )
@@ -233,7 +233,6 @@ plot_combine = function(wh, ensGene, peakID, SNP){
 
 	# caQTL 
 	fig_caqtl = plotMht( gr_caqtl[gr_caqtl$Gene == peakID], wh )
-
 
 	df = merge( data.frame(gr_ad_gwas), data.frame(gr_eqtl[gr_eqtl$Gene == ensGene]), by="start")
 	df$CLPP.eqtl = with(df, PIP.x*PIP.y)
@@ -248,11 +247,10 @@ plot_combine = function(wh, ensGene, peakID, SNP){
 	df_clpp = merge( df_eqtl, df_caqtl, by="Variant")
 
 	df = reshape2::melt(df_clpp, id.vars="Variant")
-	fig_CLPP = ggplot(df, aes(Variant, value, fill=variable)) + geom_bar(stat="identity") + theme_classic() + scale_fill_brewer(name="Assay", palette="Set1") + ylab("CLPP") + scale_y_continuous(expand=c(0, 0), limits=c(0, NA))
-
+	fig_CLPP = ggplot(df, aes(Variant, value, fill=variable)) + geom_bar(stat="identity", position = "dodge") + theme_classic() + scale_fill_brewer(name="Assay", palette="Set1") + ylab("CLPP") + scale_y_continuous(expand=c(0, 0), limits=c(0, NA)) + theme(aspect.ratio=1)
 
 	# Gene
-	fig_gene = plotEnsGenes( ensdb, wh)
+	fig_gene = plotEnsGenes( ensdb, wh, non_coding=non_coding)
 
 	# ATAC-seq peaks
 	# highlight the target peak
@@ -261,28 +259,69 @@ plot_combine = function(wh, ensGene, peakID, SNP){
 	fig_bed = plotBed( gr_peaks, wh )
 
 	# CAUSALdb plot
-	# blid = df_causaldb[Variant == SNP,unique(block_id)]
-	# df = df_causaldb[block_id == blid,]
-	# df = merge(df, causalDB[['meta_info']], by.x="meta_id", by.y="ID")
-	# df = df[grep("Alz", df$MeSH_term),]
-	# df = df[!df$meta_id %in% c('CA184'),]
+	if( showCDB ){
+		blid = df_causaldb[Variant == SNP,unique(block_id)]
+		df = df_causaldb[block_id == blid,]
+		df = merge(df, causalDB[['meta_info']], by.x="meta_id", by.y="ID")
+		df = df[grep("Alz", df$MeSH_term),]
+		df = df[!df$meta_id %in% c('CA184'),]
+		df$Study = with(df, paste(Trait, "\n", `Consortium/author`, Year))
+		studyFct = unique(df$Study)
+		df$Study = factor(df$Study, studyFct)
+		df$Posterior = df$FINEMAP
 
-	# fig_cdb = ggplot(df, aes(BP, FINEMAP, color = paste0(Trait, ' (',`Consortium/author`, ', ', Year,')'))) + geom_point() + scale_x_continuous(expand=c(0,0), limits=c(start(wh), end(wh))) + theme_classic() + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_brewer(name="Study", palette="Set1") + theme(legend.position="none")
+		fig_cdb = ggplot(df, aes(BP, Posterior, color = Study)) + geom_point() + scale_x_continuous(expand=c(0,0), limits=c(start(wh), end(wh))) + theme_classic() + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_brewer(name="Study", palette="Set1") + theme(legend.position="none")
 
-	fig_track = ggbio::tracks(
-			"AD GWAS"				= fig_gwas,
-	     "eQTL"        = fig_eqtl, 
-	    "caQTL"				= fig_caqtl,
-	    # "causalDB"   = fig_cdb,
-	    'Genes'          = fig_gene,
-	    'OCR'          = fig_bed,
-	    xlim = wh,
-	    padding = unit(-.65, "lines"), 
-	    label.bg.fill="navy", 
-	    label.text.color="white",
-	    heights=c(1, 1, 1,.25, .1),
-	    title = peakID) 
-	fig_track@mutable['Genes'] = FALSE
+		df2 = merge( df, data.frame(gr_eqtl[gr_eqtl$Gene == ensGene]), by.x="BP", by.y="start")
+		df2$CLPP.eqtl = with(df2, FINEMAP*PIP)
+		df2 = df2[!is.na(df2$CLPP.eqtl),]
+		df_eqtl = with(df2, data.frame(Variant = Variant.x, 'Gene expression' = CLPP.eqtl, Study = paste(Trait, "\n", `Consortium/author`, Year), check.names=FALSE))
+
+
+		df2 = merge( df, data.frame(gr_caqtl[gr_caqtl$Gene == peakID]), by.x="BP", by.y="start")
+		df2$CLPP.caqtl = with(df2, FINEMAP*PIP)
+		df2 = df2[!is.na(df2$CLPP.caqtl),]
+		df_caqtl = with(df2, data.frame(Variant = Variant.x, 'Chromatin accessability' = CLPP.caqtl, Study = paste(Trait, "\n", `Consortium/author`, Year), check.names=FALSE))
+
+		df_clpp = merge( df_eqtl, df_caqtl, by=c("Variant", "Study"))
+
+		df = reshape2::melt(df_clpp, id.vars=c("Variant", "Study"))
+		df$Study = factor(df$Study, studyFct)
+
+		ymax = max(df$value)*1.05
+		fig_CLPP = ggplot(df, aes(Variant, value, fill=Study)) + geom_bar(stat="identity", position = "dodge") + theme_classic() + scale_fill_brewer(name="Assay", palette="Set1", drop=FALSE) + ylab("CLPP") + scale_y_continuous(expand=c(0, 0), limits=c(0, ymax)) + facet_wrap(~variable) + theme(aspect.ratio=1)
+
+		fig_track = ggbio::tracks(
+				"AD GWAS"				= fig_gwas,
+		     "eQTL"        = fig_eqtl, 
+		    "caQTL"				= fig_caqtl,
+		    "causalDB"   = fig_cdb,
+		    'Genes'          = fig_gene,
+		    'OCR'          = fig_bed,
+		    xlim = wh,
+		    padding = unit(-.65, "lines"), 
+		    label.bg.fill="navy", 
+		    label.text.color="white",
+		    heights=c(1, 1, 1,1, .25, .1),
+		    title = peakID) 
+		fig_track@mutable['Genes'] = FALSE
+
+	}else{
+
+		fig_track = ggbio::tracks(
+				"AD GWAS"				= fig_gwas,
+		     "eQTL"        = fig_eqtl, 
+		    "caQTL"				= fig_caqtl,
+		    'Genes'          = fig_gene,
+		    'OCR'          = fig_bed,
+		    xlim = wh,
+		    padding = unit(-.65, "lines"), 
+		    label.bg.fill="navy", 
+		    label.text.color="white",
+		    heights=c(1, 1, 1,.25, .1),
+		    title = peakID) 
+		fig_track@mutable['Genes'] = FALSE
+	}
 	
 	list(fig_track = fig_track, fig_CLPP = fig_CLPP)
 }
@@ -293,6 +332,8 @@ plot_combine = function(wh, ensGene, peakID, SNP){
 SNP = 'rs10792832'
 ensGene = 'ENSG00000073921'
 peakID = "Peak_30728"
+geneInfo = select(ensdb, keys=ensGene, keytype="GENEID", column=c('GENENAME', 'GENEBIOTYPE'))
+Symbol = geneInfo$GENENAME
 window = 180000
 
 gr = gr_eqtl[gr_eqtl$Variant == SNP]
@@ -305,11 +346,45 @@ figList = plot_combine(wh, ensGene, peakID, SNP)
 
 fileDir = "/hpc/users/hoffmg01/work/microglia_analysis/figures/qtlPlots"
 
-file = paste0(fileDir, '/', ensGene, "_", SNP, ".pdf")
+file = paste0(fileDir, '/', Symbol, "_", ensGene, "_", peakID, "_",SNP, ".pdf")
 pdf(file)
 figList$fig_track
 figList$fig_CLPP
 dev.off()
+
+
+
+
+# Plot Locations
+# EPHA1-AS1
+SNP = 'rs11771145'
+ensGene = 'ENSG00000229153'
+peakID = "Peak_188003"
+geneInfo = select(ensdb, keys=ensGene, keytype="GENEID", column=c('GENENAME', 'GENEBIOTYPE'))
+Symbol = geneInfo$GENENAME
+window = 80000
+
+gr = gr_eqtl[gr_eqtl$Variant == SNP]
+
+chrom = as.character(unique(seqnames(gr)@values))
+center = unique(start(gr))
+wh = GRanges(paste0("chr", chrom), IRanges(center-window, center+window))
+
+figList = plot_combine(wh, ensGene, peakID, SNP, non_coding=TRUE, showCDB=TRUE)
+
+file = paste0(fileDir, '/', Symbol, "_", ensGene, "_", peakID, "_",SNP, ".pdf")
+pdf(file)
+figList$fig_track
+figList$fig_CLPP
+dev.off()
+
+
+
+
+
+
+
+
 
 
 
@@ -347,11 +422,12 @@ for(i in 1:nrow(df_focus_gene)){
 	figList = plot_combine(wh, ensGene, peakID, SNP)
 
 	file = paste0(fileDir, '/', Symbol, "_", ensGene, "_", peakID, "_",SNP, ".pdf")
-	pdf(file)
-	figList$fig_track
-	figList$fig_CLPP
-	dev.off()
+	ggbio::ggsave(file, figList$fig_track)
+	file = paste0(fileDir, '/', Symbol, "_", ensGene, "_", peakID, "_",SNP, "_CLPP.pdf")
+	ggbio::ggsave(file, figList$fig_CLPP)
 }
+
+
 
 
 # For each caQTL
@@ -375,12 +451,12 @@ for(i in 1:nrow(df_focus_peak)){
 	figList = plot_combine(wh, ensGene, peakID, SNP)
 
 	file = paste0(fileDir, '/', peakID, "_", SNP, ".pdf")
-	pdf(file)
-	figList$fig_track
-	figList$fig_CLPP
-	dev.off()
-
+	ggbio::ggsave(file, figList$fig_track)
+	file = paste0(fileDir, '/', peakID, "_", SNP, "_CLPP.pdf")
+	ggbio::ggsave(file, figList$fig_CLPP)
 }
+
+
 
 ```
 
