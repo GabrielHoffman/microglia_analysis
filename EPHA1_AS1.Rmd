@@ -218,9 +218,9 @@ gr_caqtl = with(df_caQTL[eQTL_order==1,], GRanges( Chr, IRanges(start=Position, 
 # ATAC-seq peaks
 gr_peaks = with(df_peak_location, GRanges(Chr, IRanges(start, end, name=name)))
 
+devtools::unload("EnsDb.Hsapiens.v75")
 
 ensdb = EnsDb.Hsapiens.v75::EnsDb.Hsapiens.v75 # genes on hg19
-
 
 
 plot_combine = function(wh, ensGene, peakID, SNP){
@@ -261,13 +261,13 @@ plot_combine = function(wh, ensGene, peakID, SNP){
 	fig_bed = plotBed( gr_peaks, wh )
 
 	# CAUSALdb plot
-	blid = df_causaldb[Variant == SNP,unique(block_id)]
-	df = df_causaldb[block_id == blid,]
-	df = merge(df, causalDB[['meta_info']], by.x="meta_id", by.y="ID")
-	df = df[grep("Alz", df$MeSH_term),]
-	df = df[!df$meta_id %in% c('CA184'),]
+	# blid = df_causaldb[Variant == SNP,unique(block_id)]
+	# df = df_causaldb[block_id == blid,]
+	# df = merge(df, causalDB[['meta_info']], by.x="meta_id", by.y="ID")
+	# df = df[grep("Alz", df$MeSH_term),]
+	# df = df[!df$meta_id %in% c('CA184'),]
 
-	fig_cdb = ggplot(df, aes(BP, FINEMAP, color = paste0(Trait, ' (',`Consortium/author`, ', ', Year,')'))) + geom_point() + scale_x_continuous(expand=c(0,0), limits=c(start(wh), end(wh))) + theme_classic() + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_brewer(name="Study", palette="Set1") + theme(legend.position="none")
+	# fig_cdb = ggplot(df, aes(BP, FINEMAP, color = paste0(Trait, ' (',`Consortium/author`, ', ', Year,')'))) + geom_point() + scale_x_continuous(expand=c(0,0), limits=c(start(wh), end(wh))) + theme_classic() + scale_y_continuous(expand=c(0,0), limits=c(0,1)) + scale_color_brewer(name="Study", palette="Set1") + theme(legend.position="none")
 
 	fig_track = ggbio::tracks(
 			"AD GWAS"				= fig_gwas,
@@ -319,6 +319,9 @@ dev.off()
 file = "/sc/arion/projects/Microglia/Combined_RNAseq_ATACseq/GWAS_loci_investigations/GWAS_loci_analyses/Novel_Loci/NovelLoci_locations_RK_6_24_21.csv"
 df_focus = fread(file)
 
+fileDir = "/hpc/users/hoffmg01/work/microglia_analysis/figures/qtlPlots"
+window = 180000
+
 # For each eQTL
 df_focus_gene = df_focus[Gene_ID !='',]
 
@@ -335,8 +338,6 @@ for(i in 1:nrow(df_focus_gene)){
 		peakID = ''
 	}
 
-	window = 180000
-
 	gr = gr_eqtl[gr_eqtl$Variant == SNP]
 
 	chrom = as.character(unique(seqnames(gr)@values))
@@ -345,9 +346,7 @@ for(i in 1:nrow(df_focus_gene)){
 
 	figList = plot_combine(wh, ensGene, peakID, SNP)
 
-	fileDir = "/hpc/users/hoffmg01/work/microglia_analysis/figures/qtlPlots"
-
-	file = paste0(fileDir, '/', ensGene, "_", SNP, ".pdf")
+	file = paste0(fileDir, '/', Symbol, "_", ensGene, "_", peakID, "_",SNP, ".pdf")
 	pdf(file)
 	figList$fig_track
 	figList$fig_CLPP
@@ -375,15 +374,13 @@ for(i in 1:nrow(df_focus_peak)){
 
 	figList = plot_combine(wh, ensGene, peakID, SNP)
 
-	fileDir = "/hpc/users/hoffmg01/work/microglia_analysis/figures/qtlPlots"
-
-	file = paste0(fileDir, '/', ensGene, "_", SNP, ".pdf")
+	file = paste0(fileDir, '/', peakID, "_", SNP, ".pdf")
 	pdf(file)
 	figList$fig_track
 	figList$fig_CLPP
 	dev.off()
-}
 
+}
 
 ```
 
