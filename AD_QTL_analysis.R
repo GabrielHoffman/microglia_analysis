@@ -56,6 +56,7 @@ z = with(df_merge, abs(beta_AD - beta_Cont) / sqrt(se_AD^2 + se_Cont^2))
 
 # for SNPs with flipped alleles
 z[!isSame] = with(df_merge[!isSame,], abs(beta_AD + beta_Cont) / sqrt(se_AD^2 + se_Cont^2))
+
 # compute p-values and FDR
 p = 2*pnorm(z, lower.tail=FALSE)
 f = p.adjust(p, "BH")
