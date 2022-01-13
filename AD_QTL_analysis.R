@@ -23,7 +23,7 @@ load(file = paste0(WorkingDir, "/Workspace_preparingFilesForADvsCont_AND_metaQTL
 # aggregate AD vs control eQTL results across chromosomes
 df_ad_eqtl = do.call(rbind, lapply(ALL_AD_Cont_Combined_eQTL_list, function(x){
 	x$Pair = rownames(x)
-	x[,c("Pair", "pVal", "FDR", "beta_Cont", "beta_AD")]
+	x[,c("Pair", "pVal", "FDR", "beta_Cont", "beta_AD", 'se_AD', 'se_Cont')]
 	}))
 dim(df_ad_eqtl)
 
@@ -40,18 +40,33 @@ df_merge = merge(df_merge, df_maf_ctrl, by="rsid")
 # check that alleles are the same
 isSame = with(df_merge, A1.x == A1.y)
 
-head(df[!isSame,])
+head(df_merge[!isSame,])
 
 par(mfrow=c(1,2))
-with(df[isSame,], plot(beta_Cont, beta_AD, main="Same alleles"))
-fit = lm(beta_AD ~ beta_Cont, df[isSame,])
+with(df_merge[isSame,], plot(beta_Cont, beta_AD, main="Same alleles"))
+fit = lm(beta_AD ~ beta_Cont, df_merge[isSame,])
 abline(fit, col="red")
 
-with(df[!isSame,], plot(beta_Cont, beta_AD, main="Different alleles"))
-fit = lm(beta_AD ~ beta_Cont, df[!isSame,])
+with(df_merge[!isSame,], plot(beta_Cont, beta_AD, main="Different alleles"))
+fit = lm(beta_AD ~ beta_Cont, df_merge[!isSame,])
 abline(fit, col="red")
 
+# compute z-statistics for all SNPs
+z = with(df_merge, abs(beta_AD - beta_Cont) / sqrt(se_AD^2 + se_Cont^2))
 
+# for SNPs with flipped alleles
+z[!isSame] = with(df_merge[!isSame,], abs(beta_AD + beta_Cont) / sqrt(se_AD^2 + se_Cont^2))
+# compute p-values and FDR
+p = 2*pnorm(z, lower.tail=FALSE)
+f = p.adjust(p, "BH")
+table(f < 0.05)
+
+
+
+
+
+
+https://github.com/GabrielHoffman/microglia_analysis/blob/7ffe33c088d970828c8f889163c3bf6e11bf4a5e/AD_QTL_analysis.R#L45
 
 
 
